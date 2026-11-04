@@ -1,0 +1,1044 @@
+/* =========================================================
+   Agenda - folha de estilo
+   Decisões em: docs/projetos/agenda/design.md (na Labs).
+   Conceito: "quadro de partidas ao anoitecer".
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   1. VARIÁVEIS
+   --------------------------------------------------------- */
+:root {
+  color-scheme: dark;            /* data, hora e barra de rolagem escuras */
+
+  /* Fundos */
+  --cor-fundo: #0F0B14;
+  --cor-superficie: #191321;
+  --cor-superficie-2: #231A2E;
+  --cor-placa-baixo: #1D1626;
+
+  /* Bordas: a "decorativa" é só enfeite (1.6:1).
+     Campo e botão usam a "campo" (4.6:1, acima de 3:1). */
+  --cor-borda: #3A2F48;
+  --cor-borda-campo: #8A7A9C;
+
+  /* Texto */
+  --cor-texto: #F5EEE6;          /* 16.8:1 no fundo */
+  --cor-texto-suave: #B8AAB9;    /* 8.7:1 no fundo */
+
+  /* Cores de destaque */
+  --cor-ambar: #FFB547;          /* horas, Hoje, botão principal */
+  --cor-ambar-claro: #FFC970;
+  --cor-lilas: #C4A8FF;          /* Dia todo, local, links */
+  --cor-foco: #8FD3FF;           /* SÓ o contorno de foco */
+  --cor-perigo: #FF7B7B;         /* erro e excluir */
+  --cor-perigo-claro: #FF9A9A;
+  --cor-sucesso: #8EE6A8;
+  --cor-sobre-cor: #1A1205;      /* texto sobre âmbar e perigo */
+
+  /* Tipografia */
+  --fonte-display: "Exo 2", "Space Grotesk", system-ui, sans-serif;
+  --fonte-texto: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fonte-mono: "JetBrains Mono", ui-monospace, Consolas, "Courier New", monospace;
+
+  --fs-xs: 0.75rem;     /* 12px */
+  --fs-sm: 0.875rem;    /* 14px */
+  --fs-base: 1rem;      /* 16px */
+  --fs-md: 1.0625rem;   /* 17px */
+  --fs-lg: 1.25rem;     /* 20px */
+  --fs-xl: clamp(1.375rem, 1.1rem + 1.2vw, 1.75rem); /* 22 a 28px */
+
+  /* Espaços (escala de 4px, igual à da Labs) */
+  --esp-1: 0.25rem;
+  --esp-2: 0.5rem;
+  --esp-3: 0.75rem;
+  --esp-4: 1rem;
+  --esp-5: 1.5rem;
+  --esp-6: 2rem;
+  --esp-7: 3rem;
+  --esp-8: 4rem;
+
+  /* Raios */
+  --raio-sm: 6px;
+  --raio-md: 10px;
+  --raio-lg: 16px;
+  --raio-pill: 999px;
+
+  /* Sombras */
+  --sombra: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --brilho-ambar: 0 0 22px rgba(255, 181, 71, 0.35);
+
+  /* Layout e animação */
+  --largura-max: 760px;
+  --transicao: 180ms ease;
+}
+
+
+/* ---------------------------------------------------------
+   2. RESET
+   --------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  /* o cabeçalho gruda no topo: o foco e a rolagem param 80px abaixo */
+  scroll-padding-top: 80px;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+ul[class] {
+  list-style: none;
+  padding: 0;
+}
+
+a {
+  color: var(--cor-lilas);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--cor-texto);
+}
+
+[hidden] {
+  display: none !important;   /* nenhuma regra de display "vence" o hidden */
+}
+
+/* Foco visível (teclado): azul-céu, a única coisa azul da tela */
+:focus-visible {
+  outline: 3px solid var(--cor-foco);
+  outline-offset: 3px;
+}
+
+/* Texto só para leitor de tela */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+
+/* ---------------------------------------------------------
+   3. BASE E FUNDO ("anoitecer")
+   Brilho âmbar no canto de cima (o "pôr do sol"), brilho lilás
+   embaixo e linhas horizontais bem fracas (as fileiras do quadro).
+   --------------------------------------------------------- */
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--fonte-texto);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  color: var(--cor-texto);
+  background-color: var(--cor-fundo);
+  background-image:
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(255, 181, 71, 0.10), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 0% 100%, rgba(196, 168, 255, 0.07), transparent 70%);
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(245, 238, 230, 0.025) 0 1px,
+    transparent 1px 56px
+  );
+  mask-image: linear-gradient(to bottom, #000, transparent 70%);
+  -webkit-mask-image: linear-gradient(to bottom, #000, transparent 70%);
+}
+
+.container {
+  width: 100%;
+  max-width: var(--largura-max);
+  margin-inline: auto;
+  padding-inline: var(--esp-4);
+}
+
+@media (min-width: 640px) {
+  .container {
+    padding-inline: var(--esp-5);
+  }
+}
+
+.principal {
+  flex: 1;
+  padding-block: var(--esp-5) var(--esp-7);
+}
+
+.icone {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* Rótulo de seção: "PRÓXIMOS COMPROMISSOS" */
+.secao-titulo {
+  margin-bottom: var(--esp-4);
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cor-texto-suave);
+}
+
+
+/* ---------------------------------------------------------
+   4. CABEÇALHO
+   --------------------------------------------------------- */
+.cabecalho {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(15, 11, 20, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+.cabecalho-conteudo {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-3);
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  min-width: 0;
+}
+
+.marca-icone {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.marca h1 {
+  font-family: var(--fonte-display);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+}
+
+/* Quadradinho âmbar depois de "Agenda" (enfeite) */
+.marca h1::after {
+  content: "";
+  display: inline-block;
+  width: 0.28em;
+  height: 0.28em;
+  margin-left: 0.12em;
+  background: var(--cor-ambar);
+  border-radius: 2px;
+}
+
+/* Abaixo de 480px o botão mostra só "Novo"; " compromisso"
+   continua lá para o leitor de tela (mesma receita do .sr-only) */
+@media (max-width: 479.98px) {
+  .botao-novo-resto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+
+/* ---------------------------------------------------------
+   5. BOTÕES
+   --------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--esp-2);
+  min-height: 44px;
+  padding: var(--esp-2) var(--esp-4);
+  font-family: var(--fonte-texto);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-radius: var(--raio-pill);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--transicao), border-color var(--transicao),
+              box-shadow var(--transicao), transform var(--transicao);
+}
+
+/* Principal: âmbar com texto escuro (10.5:1) */
+.btn-primario {
+  color: var(--cor-sobre-cor);
+  background: var(--cor-ambar);
+}
+
+.btn-primario:hover {
+  color: var(--cor-sobre-cor);
+  background: var(--cor-ambar-claro);
+  box-shadow: var(--brilho-ambar);
+  transform: translateY(-1px);
+}
+
+/* Secundário: só contorno (borda 4.6:1) */
+.btn-secundario {
+  color: var(--cor-texto);
+  background: transparent;
+  border-color: var(--cor-borda-campo);
+}
+
+.btn-secundario:hover {
+  background: var(--cor-superficie-2);
+  border-color: var(--cor-texto-suave);
+}
+
+/* Perigo: só no "Excluir" da confirmação */
+.btn-perigo {
+  color: var(--cor-sobre-cor);
+  background: var(--cor-perigo);
+}
+
+.btn-perigo:hover {
+  background: var(--cor-perigo-claro);
+}
+
+/* Apertado (vem depois do hover para vencer) */
+.btn:active {
+  transform: translateY(1px) scale(0.98);
+  box-shadow: none;
+}
+
+/* Botões pequenos do item: Editar e Excluir */
+.botao-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-2);
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 var(--esp-3);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  line-height: 1;
+  color: var(--cor-texto-suave);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--raio-md);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color var(--transicao), background-color var(--transicao),
+              border-color var(--transicao), transform var(--transicao);
+}
+
+.botao-item .icone {
+  width: 18px;
+  height: 18px;
+}
+
+.botao-item:hover {
+  color: var(--cor-texto);
+  background: var(--cor-superficie-2);
+  border-color: var(--cor-borda);
+}
+
+.botao-item--perigo:hover {
+  color: var(--cor-perigo);                 /* 6.7:1 */
+  border-color: color-mix(in srgb, var(--cor-perigo) 50%, transparent);
+}
+
+.botao-item:active {
+  transform: scale(0.97);
+}
+
+
+/* ---------------------------------------------------------
+   6. AVISOS
+   --------------------------------------------------------- */
+
+/* 6.1 Faixas no topo (ficam até recarregar a página) */
+.faixa {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-3);
+  margin-bottom: var(--esp-5);
+  padding: var(--esp-3) var(--esp-4);
+  font-size: var(--fs-sm);
+  color: var(--cor-texto);
+  border: 1px solid;
+  border-radius: var(--raio-md);
+}
+
+.faixa .icone {
+  margin-top: 1px;
+}
+
+.faixa--alerta {
+  background: color-mix(in srgb, var(--cor-ambar) 12%, var(--cor-superficie));
+  border-color: color-mix(in srgb, var(--cor-ambar) 60%, transparent);
+}
+
+.faixa--alerta .icone {
+  color: var(--cor-ambar);
+}
+
+.faixa--erro {
+  background: color-mix(in srgb, var(--cor-perigo) 12%, var(--cor-superficie));
+  border-color: color-mix(in srgb, var(--cor-perigo) 60%, transparent);
+}
+
+.faixa--erro .icone {
+  color: var(--cor-perigo);
+}
+
+/* 6.2 Aviso flutuante (região viva, role="status").
+   Vazio = escondido. pointer-events: none = um toque "passa"
+   por ele, então ele nunca bloqueia um botão. */
+.status {
+  position: fixed;
+  left: 50%;
+  bottom: max(var(--esp-4), env(safe-area-inset-bottom));
+  z-index: 20;
+  width: min(100% - 2rem, 30rem);
+  padding: var(--esp-3) var(--esp-4);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--cor-texto);
+  background: var(--cor-superficie-2);
+  border: 1px solid var(--cor-borda-campo);
+  border-left: 4px solid var(--cor-sucesso);
+  border-radius: var(--raio-md);
+  box-shadow: var(--sombra);
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: status-entrar 200ms ease-out;
+}
+
+.status:empty {
+  display: none;
+}
+
+.status[data-tipo="erro"] {
+  border-left-color: var(--cor-perigo);
+}
+
+@keyframes status-entrar {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Enquanto o aviso aparece, sobra espaço no fim da página:
+   o rodapé e o último compromisso nunca ficam escondidos. */
+body:has(.status:not(:empty)) {
+  padding-bottom: 5.5rem;
+}
+
+
+/* ---------------------------------------------------------
+   7. LISTA POR DIA
+   --------------------------------------------------------- */
+.dias {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-6);
+}
+
+.dia-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--esp-1) var(--esp-2);
+  margin-bottom: var(--esp-3);
+  padding-bottom: var(--esp-2);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.25;
+  border-bottom: 1px solid var(--cor-borda);
+}
+
+/* "· daqui a 3 dias" */
+.dia-contagem {
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--cor-texto-suave);
+}
+
+/* Hoje: o único dia com cor */
+.dia--hoje .dia-titulo {
+  color: var(--cor-ambar);
+  border-bottom-color: color-mix(in srgb, var(--cor-ambar) 45%, transparent);
+}
+
+.dia--hoje .dia-titulo::before {
+  content: "";
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  border-radius: 2px;
+}
+
+
+/* ---------------------------------------------------------
+   8. COMPROMISSO
+   Celular: placa | texto, botões embaixo do texto.
+   A partir de 640px: placa | texto | botões.
+   --------------------------------------------------------- */
+.compromissos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+}
+
+.compromisso {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  gap: var(--esp-2) var(--esp-3);
+  align-items: start;
+  padding: var(--esp-3);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio-lg);
+  transition: border-color var(--transicao);
+}
+
+.compromisso:hover,
+.compromisso:focus-within {
+  border-color: color-mix(in srgb, var(--cor-ambar) 40%, var(--cor-borda));
+}
+
+/* Placa de hora: duas metades, como a plaquinha que vira */
+.compromisso-hora {
+  display: grid;
+  place-items: center;
+  min-height: 3.25rem;
+  padding: var(--esp-1);
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  text-align: center;
+  color: var(--cor-ambar);
+  background: linear-gradient(to bottom, var(--cor-superficie-2) 50%, var(--cor-placa-baixo) 50%);
+  border-radius: var(--raio-sm);
+  box-shadow: inset 0 0 0 1px var(--cor-borda);
+}
+
+/* "DIA TODO" em duas linhas, lilás */
+.compromisso-hora--dia-todo {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cor-lilas);
+}
+
+/* [Ajuste do dev, fora do CSS de referência do design]
+   Na placa de 76px do computador, "DIA TODO" cabia numa linha só.
+   A largura "min-content" é a da maior palavra, então o texto sempre
+   quebra no espaço e fica em duas linhas, "DIA / TODO" (design, seção 7.4).
+   O <span> é criado pelo app.js. */
+.compromisso-hora--dia-todo > span {
+  width: min-content;
+}
+
+.compromisso-corpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.compromisso-titulo {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.compromisso-local {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-1);
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;
+}
+
+.compromisso-local .icone {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--cor-lilas);
+}
+
+/* Observação: respeita as quebras de linha digitadas */
+.compromisso-obs {
+  margin-top: var(--esp-1);
+  padding-left: var(--esp-2);
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  border-left: 2px solid var(--cor-borda);
+}
+
+/* Botões: embaixo do texto. A margem negativa alinha o texto
+   "Editar" com o título (o botão tem 12px de espaço interno). */
+.compromisso-acoes {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2);
+  margin-left: calc(-1 * var(--esp-3));
+}
+
+@media (min-width: 640px) {
+  .compromisso {
+    grid-template-columns: 4.75rem minmax(0, 1fr) auto;
+    gap: var(--esp-4);
+    padding: var(--esp-4);
+  }
+
+  .compromisso-acoes {
+    grid-column: 3;
+    grid-row: 1;
+    flex-wrap: nowrap;
+    margin-left: 0;
+  }
+}
+
+
+/* ---------------------------------------------------------
+   9. LISTA VAZIA
+   --------------------------------------------------------- */
+.vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esp-3);
+  padding: var(--esp-7) var(--esp-5);
+  text-align: center;
+  background: var(--cor-superficie);
+  border: 1px dashed var(--cor-borda-campo);
+  border-radius: var(--raio-lg);
+}
+
+.vazio-ilustracao {
+  width: 160px;
+  height: auto;
+  margin-bottom: var(--esp-2);
+}
+
+.vazio-titulo {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.vazio-texto {
+  max-width: 32ch;
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+.vazio .btn {
+  margin-top: var(--esp-2);
+}
+
+
+/* ---------------------------------------------------------
+   10. ANTERIORES
+   --------------------------------------------------------- */
+.anteriores {
+  margin-top: var(--esp-7);
+  padding-top: var(--esp-5);
+  border-top: 1px dashed var(--cor-borda);
+}
+
+.anteriores-titulo {
+  font-size: inherit;           /* o h2 é só o "envelope" do botão */
+}
+
+.anteriores-botao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-3);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--esp-3) var(--esp-4);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  text-align: left;
+  color: var(--cor-texto);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda-campo);
+  border-radius: var(--raio-lg);
+  cursor: pointer;
+  transition: background-color var(--transicao);
+}
+
+.anteriores-botao:hover {
+  background: var(--cor-superficie-2);
+}
+
+.anteriores-contagem {
+  font-family: var(--fonte-mono);
+  font-weight: 400;
+  color: var(--cor-texto-suave);
+}
+
+.anteriores-seta {
+  transition: transform var(--transicao);
+}
+
+.anteriores-botao[aria-expanded="true"] .anteriores-seta {
+  transform: rotate(180deg);
+}
+
+.anteriores-lista {
+  margin-top: var(--esp-5);
+}
+
+/* Dentro de Anteriores: tudo mais calmo (por cor, nunca por opacity) */
+.anteriores .dia-titulo {
+  font-size: var(--fs-base);
+  color: var(--cor-texto-suave);
+}
+
+.compromisso--anterior {
+  background: transparent;
+  border-style: dashed;
+}
+
+.compromisso--anterior .compromisso-hora {
+  color: var(--cor-texto-suave);
+  background: var(--cor-superficie-2);
+}
+
+
+/* ---------------------------------------------------------
+   11. JANELAS (dialog): formulário e confirmação
+   --------------------------------------------------------- */
+.janela {
+  width: min(100% - 2rem, 32rem);
+  max-width: none;
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  margin: auto;
+  padding: 0;
+  color: var(--cor-texto);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);
+  border-top: 3px solid var(--cor-ambar);
+  border-radius: var(--raio-lg);
+  box-shadow: var(--sombra);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.janela::backdrop {
+  background: rgba(8, 5, 12, 0.72);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.janela[open] {
+  animation: janela-abrir 180ms ease-out;
+}
+
+@keyframes janela-abrir {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.janela-conteudo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-4);
+  padding: var(--esp-5);
+}
+
+.janela-titulo {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+/* Barra de botões grudada no fim da janela (a janela é quem rola).
+   As margens negativas "anulam" o padding do .janela-conteudo,
+   então a barra encosta nas bordas e no fim da janela. */
+.janela-acoes {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--esp-3);
+  margin: var(--esp-2) calc(-1 * var(--esp-5)) calc(-1 * var(--esp-5));
+  padding: var(--esp-4) var(--esp-5);
+  background: var(--cor-superficie);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.janela-acoes .btn {
+  flex: 1 1 8rem;               /* celular: dividem a largura */
+}
+
+@media (min-width: 480px) {
+  .janela-acoes .btn {
+    flex: 0 0 auto;
+    min-width: 7.5rem;
+  }
+}
+
+/* --- Campos --- */
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+  min-width: 0;
+}
+
+.campo-rotulo {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.campo-obrigatorio {
+  font-weight: 400;
+  color: var(--cor-texto-suave);
+}
+
+.campo-controle {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: var(--esp-3);
+  font-family: var(--fonte-texto);
+  font-size: var(--fs-base);     /* 16px: sem zoom no celular */
+  line-height: 1.4;
+  color: var(--cor-texto);
+  background: var(--cor-fundo);
+  border: 1px solid var(--cor-borda-campo);
+  border-radius: var(--raio-md);
+  transition: border-color var(--transicao);
+}
+
+.campo-controle:hover {
+  border-color: var(--cor-texto-suave);
+}
+
+.campo-controle:focus-visible {
+  outline: 3px solid var(--cor-foco);
+  outline-offset: 2px;
+  border-color: var(--cor-foco);
+}
+
+textarea.campo-controle {
+  min-height: 6.5rem;
+  resize: vertical;
+}
+
+/* Data e hora com números alinhados */
+.campo-controle[type="date"],
+.campo-controle[type="time"] {
+  font-variant-numeric: tabular-nums;
+}
+
+.campo-dica {
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+/* Erro: texto + ícone + borda 2px + fundo (nunca só a cor) */
+.campo-erro {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--cor-perigo);       /* 7.2:1 na janela */
+}
+
+.campo-erro .icone {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
+.campo-controle[aria-invalid="true"] {
+  padding: calc(var(--esp-3) - 1px);   /* compensa a borda mais grossa */
+  background: color-mix(in srgb, var(--cor-perigo) 8%, var(--cor-fundo));
+  border: 2px solid var(--cor-perigo);
+}
+
+/* Data e Hora lado a lado a partir de 480px */
+.campos-linha {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--esp-4);
+}
+
+@media (min-width: 480px) {
+  .campos-linha {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* --- Confirmação de exclusão --- */
+.janela--confirmar {
+  width: min(100% - 2rem, 26rem);
+  border-top-color: var(--cor-perigo);
+}
+
+.confirmar-icone {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  color: var(--cor-perigo);
+  background: color-mix(in srgb, var(--cor-perigo) 14%, transparent);
+  border-radius: 50%;
+}
+
+.confirmar-icone .icone {
+  width: 24px;
+  height: 24px;
+}
+
+.confirmar-titulo {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;      /* título longo quebra */
+}
+
+.confirmar-texto {
+  color: var(--cor-texto-suave);
+}
+
+/* [Ajuste do dev, fora do CSS de referência do design]
+   Aviso "Não foi possível salvar o compromisso." dentro do formulário.
+   Reaproveita a .faixa--erro; aqui só tiramos a margem de baixo,
+   porque o espaço entre os itens da janela já vem do "gap". */
+.janela-erro {
+  margin-bottom: 0;
+}
+
+
+/* ---------------------------------------------------------
+   12. RODAPÉ (no fim da página, nunca fixo)
+   --------------------------------------------------------- */
+.rodape {
+  margin-top: var(--esp-7);
+  padding-block: var(--esp-5);
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+  border-top: 1px solid var(--cor-borda);
+}
+
+.rodape-conteudo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--esp-2) var(--esp-5);
+}
+
+.rodape-aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-2);
+}
+
+.rodape-aviso .icone {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+
+/* ---------------------------------------------------------
+   13. MOVIMENTO REDUZIDO
+   --------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .btn:hover,
+  .btn:active,
+  .botao-item:active {
+    transform: none;
+  }
+}
+
+
+/* ---------------------------------------------------------
+   14. ALTO CONTRASTE DO WINDOWS
+   As cores somem; garantimos as bordas que separam as coisas.
+   --------------------------------------------------------- */
+@media (forced-colors: active) {
+  .btn,
+  .botao-item,
+  .compromisso-hora,
+  .campo-controle,
+  .anteriores-botao {
+    border: 1px solid ButtonText;
+  }
+
+  .campo-controle[aria-invalid="true"] {
+    border-width: 2px;
+  }
+}

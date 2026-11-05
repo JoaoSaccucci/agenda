@@ -3,8 +3,10 @@
    A parte que conversa com a tela: monta a lista por dia,
    abre o formulário, salva, edita, exclui e mostra avisos.
 
-   Usa as funções de datas.js e armazenamento.js, que são
-   carregados antes deste arquivo no index.html.
+   Usa as funções de datas.js, armazenamento.js e copia.js,
+   que são carregados antes deste arquivo no index.html.
+   Etapa 2a: janela "Seus dados" (baixar e importar cópia)
+   e faixa de lembrete de cópia (seções 10 a 12).
 
    Regra de segurança (US01): tudo o que a pessoa digita entra
    na página com textContent, NUNCA com innerHTML. Assim um
@@ -40,6 +42,15 @@ let resumoDaTela = "";
 // Relógio que esconde o aviso flutuante depois de alguns segundos.
 let relogioDoStatus = null;
 
+// Etapa 2a: data (Date) da última cópia baixada, ou null se nunca houve.
+// Fica também na memória: se o localStorage não puder guardar a data,
+// a janela "Seus dados" ainda mostra a cópia que acabou de ser feita.
+let ultimoBackup = null;
+
+// Etapa 2a: o arquivo já conferido que espera a escolha "Juntar" ou
+// "Substituir tudo": { compromissos: [...], ignorados: N }.
+let copiaParaImportar = null;
+
 
 /* ---------------------------------------------------------
    2. ELEMENTOS DA PÁGINA
@@ -69,6 +80,27 @@ const erroSalvar = document.getElementById("erro-salvar");
 const janelaExcluir = document.getElementById("janela-excluir");
 const tituloExcluir = document.getElementById("excluir-titulo");
 
+// Etapa 2a: "Seus dados", importação e lembrete de cópia
+const tituloProximos = document.getElementById("titulo-proximos");
+const botaoDados = document.getElementById("botao-dados");
+const janelaDados = document.getElementById("janela-dados");
+const placaComData = document.getElementById("dados-placa-data");
+const placaValor = document.getElementById("dados-ultima-valor");
+const placaNunca = document.getElementById("dados-placa-nunca");
+const botaoBaixar = document.getElementById("botao-baixar");
+const botaoImportar = document.getElementById("botao-importar");
+const campoArquivo = document.getElementById("arquivo-importar");
+const avisoDados = document.getElementById("dados-aviso");
+
+const janelaImportar = document.getElementById("janela-importar");
+const resumoImportar = document.getElementById("importar-resumo");
+const botaoJuntar = janelaImportar.querySelector('[data-acao="juntar"]');
+const botaoSubstituirTudo = janelaImportar.querySelector('[data-acao="substituir"]');
+const textoOpcaoSubstituir = document.getElementById("opcao-substituir-texto");
+
+const janelaSubstituir = document.getElementById("janela-substituir");
+const textoSubstituir = document.getElementById("substituir-texto");
+
 
 /* ---------------------------------------------------------
    3. ÍCONES
@@ -80,7 +112,11 @@ const ICONES = {
   editar: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/>',
   excluir: '<path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>',
   local: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
-  alerta: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/>'
+  alerta: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/>',
+  // Etapa 2a (design, seção 12.8)
+  check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+  baixar: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
+  historico: '<path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>'
 };
 
 // Ilustração da lista vazia (design, seção 8.3). Também é texto fixo.
@@ -455,7 +491,9 @@ function mostrarFaixa(tipo, texto) {
   const faixa = criarElemento("p", "faixa faixa--" + tipo);
   faixa.appendChild(criarIcone("alerta"));
   faixa.appendChild(criarElemento("span", null, texto));
-  faixas.appendChild(faixa);
+  // As faixas de problema ficam sempre ANTES do lembrete de cópia (US07, 2a).
+  // insertBefore(nova, null) põe no fim, então funciona com ou sem lembrete.
+  faixas.insertBefore(faixa, document.getElementById("faixa-lembrete"));
   faixa.scrollIntoView({ block: "nearest" });
 }
 
@@ -648,7 +686,301 @@ function confirmarExclusao() {
 
 
 /* ---------------------------------------------------------
-   10. EVENTOS (o que acontece em cada clique ou tecla)
+   10. SEUS DADOS: BAIXAR CÓPIA (US08)
+   Regra dos avisos da Entrega 2a: com a janela "Seus dados" aberta,
+   os avisos aparecem DENTRO dela (#dados-aviso). O aviso flutuante
+   ficaria atrás da janela, numa parte "inerte" da página, e o leitor
+   de tela poderia não ler. Com as janelas fechadas, vale o flutuante.
+   --------------------------------------------------------- */
+
+/* Placa "Última cópia": a data (DD/MM/AAAA) ou a frase de "nenhuma cópia". */
+function atualizarPlacaDaCopia() {
+  const temCopia = ultimoBackup !== null;
+  placaComData.hidden = !temCopia;
+  placaNunca.hidden = temCopia;
+  if (temCopia) {
+    placaValor.textContent = dataComAno(ultimoBackup);
+    placaValor.dateTime = dataHoraParaAtributo(ultimoBackup);
+  }
+}
+
+function abrirJanelaDados() {
+  avisoDados.replaceChildren();   // a região de avisos começa vazia toda vez
+  atualizarPlacaDaCopia();
+  janelaDados.showModal();
+  botaoBaixar.focus();            // a ação mais comum, e nada aqui apaga dados
+}
+
+/* Aviso dentro da janela "Seus dados".
+   tipo = "sucesso" (verde, ícone de check), "erro" (vermelho) ou "alerta" (âmbar).
+   Um aviso por vez: o novo substitui o anterior. */
+function mostrarAvisoNaJanela(tipo, texto) {
+  const aviso = criarElemento("p", "faixa faixa--" + tipo);
+  aviso.appendChild(criarIcone(tipo === "sucesso" ? "check" : "alerta"));
+  aviso.appendChild(criarElemento("span", null, texto));
+  // Como no aviso flutuante: esvazia agora e escreve no quadro seguinte,
+  // para o leitor de tela ler de novo mesmo se a frase for a mesma.
+  avisoDados.replaceChildren();
+  requestAnimationFrame(function () {
+    avisoDados.replaceChildren(aviso);
+    aviso.scrollIntoView({ block: "nearest" });
+  });
+}
+
+/* Faz o navegador baixar um texto como arquivo. Nada vai para a internet:
+   - Blob = um "arquivo" criado na memória da página;
+   - URL.createObjectURL dá um endereço provisório para ele;
+   - um link <a download="nome"> clicado pelo código inicia o download.
+   O link nem precisa entrar na página (Chrome, Edge e Firefox aceitam). */
+function baixarArquivo(nome, texto) {
+  // charset=utf-8: os acentos chegam certos no arquivo.
+  const arquivo = new Blob([texto], { type: "application/json;charset=utf-8" });
+  const endereco = URL.createObjectURL(arquivo);
+  const link = document.createElement("a");
+  link.href = endereco;
+  link.download = nome;
+  link.click();
+  // Libera a memória um pouco depois, quando o download já começou.
+  setTimeout(function () { URL.revokeObjectURL(endereco); }, 1000);
+}
+
+/* Baixa a cópia. É a mesma pela janela "Seus dados" e pela faixa de
+   lembrete. Devolve false quando não há compromissos (nenhum arquivo
+   é gerado); quem chama decide onde mostrar o aviso. */
+function baixarCopia() {
+  if (compromissos.length === 0) return false;
+
+  const agora = new Date();
+  baixarArquivo(nomeDoArquivoDeCopia(agora), textoDoArquivoDeCopia(compromissos, agora));
+  ultimoBackup = agora;
+  registrarBackup(agora.toISOString());   // grava em "agenda:ultimo-backup"
+  esconderLembrete();                     // a cópia está em dia: a faixa sai
+  return true;
+}
+
+
+/* ---------------------------------------------------------
+   11. IMPORTAR CÓPIA (US09)
+   Caminho: "Importar cópia" -> seletor de arquivos -> conferir o
+   arquivo (sem mudar nada) -> janela "Importar cópia" (Juntar ou
+   Substituir tudo) -> gravar -> fechar tudo e mostrar o resultado.
+   As janelas ficam EMPILHADAS: cada showModal() abre por cima da
+   anterior, e o Esc fecha só a de cima.
+   --------------------------------------------------------- */
+
+/* Lê e confere o arquivo escolhido.
+   "async" permite usar "await": o programa espera o arquivo ser lido
+   (isso leva um tempinho) sem travar a página enquanto isso. */
+async function importarArquivo(arquivo) {
+  avisoDados.replaceChildren();   // aviso antigo (ex.: "Cópia baixada.") sai
+
+  // Erros do arquivo: nada muda, o aviso aparece na janela e o foco
+  // fica (ou volta) em "Importar cópia".
+  function recusar(texto) {
+    mostrarAvisoNaJanela("erro", texto);
+    botaoImportar.focus();
+  }
+
+  // O tamanho é conferido antes de ler: nem abrimos um arquivo enorme.
+  if (arquivo.size > TAMANHO_MAXIMO_COPIA) {
+    recusar(ERRO_GRANDE_DEMAIS);
+    return;
+  }
+
+  let texto;
+  try {
+    texto = await arquivo.text();
+  } catch (erro) {
+    recusar(ERRO_NAO_E_COPIA);   // o navegador não conseguiu ler o arquivo
+    return;
+  }
+
+  // Se a pessoa fechou "Seus dados" enquanto o arquivo era lido, paramos aqui.
+  if (!janelaDados.open) return;
+
+  const resultado = lerArquivoDeCopia(texto);
+  if (resultado.erro) {
+    recusar(resultado.erro);
+    return;
+  }
+  abrirJanelaImportar(resultado);
+}
+
+/* Janela "Importar cópia", por cima de "Seus dados".
+   Tudo o que vem do arquivo entra com textContent (nunca como HTML). */
+function abrirJanelaImportar(copia) {
+  copiaParaImportar = copia;
+  const naCopia = copia.compromissos.length;
+  const aqui = compromissos.length;
+
+  // "Esta cópia tem 12 compromissos." (o número em destaque)
+  const linhaCopia = criarElemento("p");
+  linhaCopia.append(
+    "Esta cópia tem ",
+    criarElemento("span", "importar-numero", String(naCopia)),
+    naCopia === 1 ? " compromisso." : " compromissos."
+  );
+  resumoImportar.replaceChildren(linhaCopia);
+
+  // "2 itens com problema foram ignorados." (só se houver ignorados)
+  if (copia.ignorados > 0) {
+    const linhaIgnorados = criarElemento("p", "importar-ignorados");
+    linhaIgnorados.appendChild(criarIcone("alerta"));
+    linhaIgnorados.appendChild(criarElemento("span", null, textoIgnorados(copia.ignorados)));
+    resumoImportar.appendChild(linhaIgnorados);
+  }
+
+  // "Neste navegador há 8 compromissos." (para comparar antes de escolher)
+  resumoImportar.appendChild(criarElemento("p", "importar-atual", textoNesteNavegador(aqui)));
+
+  textoOpcaoSubstituir.textContent = textoExplicaSubstituir(aqui, naCopia);
+
+  janelaImportar.showModal();
+  botaoJuntar.focus();
+}
+
+/* "Juntar": acrescenta os da cópia e mantém os daqui. */
+function importarJuntando() {
+  const resultado = juntarCompromissos(compromissos, copiaParaImportar.compromissos);
+  terminarImportacao(resultado.lista, false, textoResultadoJuntar(resultado.novos, resultado.atualizados));
+}
+
+/* "Substituir tudo": pede confirmação, por cima de "Importar cópia". */
+function pedirParaSubstituir() {
+  const aqui = compromissos.length;
+
+  // [Decisão do chefe para um caso que os requisitos não cobrem]
+  // Sem nenhum compromisso neste navegador, nada seria apagado: não há
+  // o que confirmar. A cópia é importada direto, com o mesmo fim de uma
+  // importação normal (fecha tudo, aviso flutuante, foco em "Seus dados").
+  if (aqui === 0) {
+    importarSubstituindo();
+    return;
+  }
+
+  textoSubstituir.textContent = textoConfirmaSubstituir(aqui, copiaParaImportar.compromissos.length);
+  janelaSubstituir.showModal();
+  // O foco começa no "Cancelar", a opção mais segura.
+  janelaSubstituir.querySelector('[data-acao="cancelar"]').focus();
+}
+
+/* "Substituir" (confirmado): a lista passa a ser só a da cópia.
+   O armazenamento guarda antes a lista atual em
+   "agenda:compromissos-antes-da-importacao". */
+function importarSubstituindo() {
+  const lista = copiaParaImportar.compromissos;
+  terminarImportacao(lista, true, textoResultadoSubstituir(lista.length));
+}
+
+/* Fim da importação ("Juntar" ou "Substituir"). */
+function terminarImportacao(listaNova, substituirTudo, mensagem) {
+  if (!gravarImportacao(listaNova, substituirTudo)) {
+    // localStorage cheio ou indisponível: nada mudou no que estava salvo
+    // (nem na memória, porque a lista "compromissos" não foi trocada).
+    // Fecha a escolha e a confirmação, volta para "Seus dados" e avisa lá.
+    // (close() numa janela que já está fechada não faz nada.)
+    janelaSubstituir.close();
+    janelaImportar.close();
+    mostrarAvisoNaJanela("erro", "Não foi possível importar a cópia neste navegador.");
+    botaoImportar.focus();
+    return;
+  }
+
+  // Deu certo: a memória recebe a lista nova e a tela é redesenhada.
+  compromissos = listaNova;
+  desenharLista();
+
+  // Fecha TODAS as janelas ANTES de escrever no aviso flutuante: com
+  // uma janela aberta, ele ficaria escondido e talvez não fosse lido.
+  janelaSubstituir.close();
+  janelaImportar.close();
+  janelaDados.close();
+  mostrarStatus(mensagem);
+  botaoDados.focus();
+}
+
+
+/* ---------------------------------------------------------
+   12. LEMBRETE DE CÓPIA (US10)
+   A faixa lilás no topo do conteúdo. Aparece ao abrir a página,
+   sem roubar o foco e sem animação (quem decide é avaliarLembrete,
+   em copia.js).
+   --------------------------------------------------------- */
+
+/* Monta a faixa (design, seção 12.7). dias = null quando nunca houve cópia. */
+function mostrarLembrete(dias) {
+  const faixa = criarElemento("div", "faixa faixa--lembrete");
+  faixa.id = "faixa-lembrete";
+  faixa.appendChild(criarIcone("historico"));
+
+  const corpo = criarElemento("div", "faixa-corpo");
+  // O rótulo em texto separa o lembrete das faixas de problema (não só a cor).
+  corpo.appendChild(criarElemento("p", "faixa-rotulo", "Lembrete de cópia"));
+  const texto = criarElemento("p", "faixa-texto");
+  if (dias === null) {
+    texto.textContent = "Você ainda não fez uma cópia dos seus compromissos.";
+  } else {
+    texto.append("Sua última cópia foi há ", criarElemento("span", "faixa-destaque", dias + " dias"), ".");
+  }
+  corpo.appendChild(texto);
+  corpo.appendChild(criarElemento("p", "faixa-subtexto", "Baixe uma cópia para não perder nada se o navegador for limpo."));
+  faixa.appendChild(corpo);
+
+  const acoes = criarElemento("div", "faixa-acoes");
+  const baixar = criarElemento("button", "btn btn-primario");
+  baixar.type = "button";
+  baixar.dataset.acao = "lembrete-baixar";
+  baixar.appendChild(criarIcone("baixar"));
+  baixar.appendChild(document.createTextNode("Baixar cópia agora"));
+  acoes.appendChild(baixar);
+
+  // Nome acessível: "Depois, lembrar daqui a 7 dias" (começa com o texto visível).
+  // Usamos aria-label, e não um <span class="sr-only">: o pedaço escondido
+  // fica com position: absolute e o navegador põe um espaço antes dele,
+  // o que dava "Depois , lembrar..." (espaço antes da vírgula).
+  const depois = criarElemento("button", "btn btn-secundario", "Depois");
+  depois.type = "button";
+  depois.dataset.acao = "lembrete-depois";
+  depois.setAttribute("aria-label", "Depois, lembrar daqui a 7 dias");
+  acoes.appendChild(depois);
+  faixa.appendChild(acoes);
+
+  // Sempre a última faixa: depois das faixas de problema (US07).
+  faixas.appendChild(faixa);
+}
+
+/* Tira a faixa. Se o foco estava dentro dela, ele iria "para o nada"
+   (topo da página): mandamos para o título "Próximos compromissos",
+   que é o que vem logo depois. */
+function esconderLembrete() {
+  const faixa = document.getElementById("faixa-lembrete");
+  if (!faixa) return;
+  const focoEstavaDentro = faixa.contains(document.activeElement);
+  faixa.remove();
+  if (focoEstavaDentro) tituloProximos.focus();
+}
+
+/* "Baixar cópia agora": o mesmo download da US08, com aviso flutuante
+   (aqui não há janela aberta). */
+function baixarPeloLembrete() {
+  if (baixarCopia()) {
+    mostrarStatus("Cópia baixada.");
+  } else {
+    // Não acontece na prática (sem compromissos a faixa nem aparece).
+    mostrarStatus("Não há compromissos para copiar.", "erro");
+  }
+}
+
+/* "Depois": esconde a faixa e só deixa ela voltar daqui a 7 dias. */
+function adiarPeloLembrete() {
+  adiarLembrete(fimDoAdiamento(new Date()).toISOString());
+  esconderLembrete();
+  mostrarStatus("Lembrete adiado por 7 dias.");
+}
+
+
+/* ---------------------------------------------------------
+   13. EVENTOS (o que acontece em cada clique ou tecla)
    --------------------------------------------------------- */
 
 botaoNovo.addEventListener("click", function () {
@@ -664,6 +996,16 @@ areaPrincipal.addEventListener("click", function (evento) {
 
   if (botao.dataset.acao === "novo") {
     abrirFormulario(null, botao);
+    return;
+  }
+
+  // Botões da faixa de lembrete de cópia (US10)
+  if (botao.dataset.acao === "lembrete-baixar") {
+    baixarPeloLembrete();
+    return;
+  }
+  if (botao.dataset.acao === "lembrete-depois") {
+    adiarPeloLembrete();
     return;
   }
 
@@ -736,8 +1078,68 @@ document.addEventListener("visibilitychange", function () {
 });
 
 
+// --- Etapa 2a: janela "Seus dados" ---
+botaoDados.addEventListener("click", abrirJanelaDados);
+
+botaoBaixar.addEventListener("click", function () {
+  if (baixarCopia()) {
+    atualizarPlacaDaCopia();
+    mostrarAvisoNaJanela("sucesso", "Cópia baixada.");
+    // O foco fica no próprio botão "Baixar cópia" (não mexemos nele).
+  } else {
+    mostrarAvisoNaJanela("alerta", "Não há compromissos para copiar.");
+  }
+});
+
+// "Importar cópia" abre o seletor de arquivos do sistema.
+botaoImportar.addEventListener("click", function () {
+  campoArquivo.click();
+});
+
+// "change" só acontece quando a pessoa ESCOLHE um arquivo. Se ela cancelar
+// o seletor, nada acontece (e o foco fica em "Importar cópia").
+campoArquivo.addEventListener("change", function () {
+  const arquivo = campoArquivo.files[0];
+  // Limpa o campo: sem isso, escolher o MESMO arquivo de novo não dispara
+  // o "change" (o valor não teria mudado).
+  campoArquivo.value = "";
+  if (arquivo) importarArquivo(arquivo);
+});
+
+janelaDados.querySelector('[data-acao="fechar"]').addEventListener("click", function () {
+  janelaDados.close();
+});
+
+// --- Etapa 2a: janela "Importar cópia" e confirmação "Substituir tudo?" ---
+botaoJuntar.addEventListener("click", importarJuntando);
+botaoSubstituirTudo.addEventListener("click", pedirParaSubstituir);
+janelaImportar.querySelector('[data-acao="cancelar"]').addEventListener("click", function () {
+  janelaImportar.close();
+});
+janelaSubstituir.querySelector('[data-acao="cancelar"]').addEventListener("click", function () {
+  janelaSubstituir.close();
+});
+janelaSubstituir.querySelector('[data-acao="confirmar-substituir"]').addEventListener("click", importarSubstituindo);
+
+/* Para onde vai o foco quando cada janela fecha (botão, Esc ou fim da
+   importação). O evento "close" chega um pouquinho DEPOIS do close():
+   no fim da importação, as três janelas já estão fechadas quando os
+   eventos chegam. Por isso cada janela só devolve o foco para o botão
+   que a abriu se a janela de baixo ainda estiver aberta. */
+janelaSubstituir.addEventListener("close", function () {
+  if (janelaImportar.open) botaoSubstituirTudo.focus();
+});
+janelaImportar.addEventListener("close", function () {
+  if (janelaDados.open) botaoImportar.focus();
+  copiaParaImportar = null;   // a escolha acabou: esquece o arquivo conferido
+});
+janelaDados.addEventListener("close", function () {
+  botaoDados.focus();
+});
+
+
 /* ---------------------------------------------------------
-   11. INÍCIO
+   14. INÍCIO
    --------------------------------------------------------- */
 function iniciar() {
   const resultado = carregarCompromissos();
@@ -754,6 +1156,15 @@ function iniciar() {
 
   desenharLista();
   agendarProximoMinuto();
+
+  // Etapa 2a: data da última cópia (para a janela "Seus dados") e,
+  // se for a hora, a faixa de lembrete. Com o localStorage indisponível
+  // a faixa não aparece (não haveria onde guardar a data da cópia).
+  ultimoBackup = isoParaData(lerUltimoBackup());
+  if (armazenamentoDisponivel) {
+    const lembrete = avaliarLembrete(compromissos, lerUltimoBackup(), lerUltimaMudanca(), lerLembreteAdiadoAte(), new Date());
+    if (lembrete) mostrarLembrete(lembrete.diasDesdeACopia);
+  }
 }
 
 iniciar();

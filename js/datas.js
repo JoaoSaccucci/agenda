@@ -119,3 +119,30 @@ function tituloDoDia(textoData, agora, comContagem) {
   }
   return { texto: texto, contagem: contagem };
 }
+
+
+/* ---------------------------------------------------------
+   Etapa 2a: datas da cópia (US08 e US10)
+   --------------------------------------------------------- */
+
+/* Texto ISO guardado no localStorage ("2026-11-05T21:10:00.000Z") -> Date.
+   Devolve null se o texto não existir ou não for uma data de verdade
+   (Date.parse devolve NaN, "Not a Number", quando não entende o texto). */
+function isoParaData(texto) {
+  if (typeof texto !== "string") return null;
+  const milissegundos = Date.parse(texto);
+  return Number.isNaN(milissegundos) ? null : new Date(milissegundos);
+}
+
+
+/* Date -> "05/11/2026" (dia LOCAL, com o ano). Usada na "Última cópia". */
+function dataComAno(data) {
+  return doisDigitos(data.getDate()) + "/" + doisDigitos(data.getMonth() + 1) + "/" + data.getFullYear();
+}
+
+
+/* Date -> "2026-11-05T18:10" (hora LOCAL), o formato do atributo
+   datetime da tag <time>. */
+function dataHoraParaAtributo(data) {
+  return dataParaTexto(data) + "T" + doisDigitos(data.getHours()) + ":" + doisDigitos(data.getMinutes());
+}

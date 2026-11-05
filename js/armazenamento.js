@@ -8,11 +8,18 @@
      joaosaccucci.github.io), então NUNCA usamos
      localStorage.clear() e nunca mexemos em chaves de outros.
    - Os dados ficam num objeto { versao: 1, compromissos: [...] }.
+   - Etapa 2a: chaves novas para a cópia dos dados (US08 a US10).
    ========================================================= */
 
 const CHAVE_COMPROMISSOS = "agenda:compromissos";
 const CHAVE_CORROMPIDO = "agenda:compromissos-corrompido";
 const CHAVE_TESTE = "agenda:teste";
+// Etapa 2a. As três primeiras guardam uma data e hora no formato ISO;
+// a última guarda o texto inteiro de "agenda:compromissos".
+const CHAVE_ULTIMO_BACKUP = "agenda:ultimo-backup";                // última cópia baixada
+const CHAVE_ULTIMA_MUDANCA = "agenda:ultima-mudanca";              // última criação, edição, exclusão ou importação
+const CHAVE_LEMBRETE_ADIADO = "agenda:lembrete-backup-adiado-ate"; // até quando o lembrete fica escondido
+const CHAVE_ANTES_DA_IMPORTACAO = "agenda:compromissos-antes-da-importacao"; // lista de antes do "Substituir tudo"
 const VERSAO_FORMATO = 1;
 
 // Começa como true e vira false se o localStorage não funcionar.
@@ -130,11 +137,15 @@ function salvarCompromissos(compromissos) {
   const dados = { versao: VERSAO_FORMATO, compromissos: compromissos };
   try {
     window.localStorage.setItem(CHAVE_COMPROMISSOS, JSON.stringify(dados));
-    return true;
   } catch (erro) {
     // O setItem falhou, então o que estava salvo antes continua lá, intacto.
     return false;
   }
+  // A lista só é gravada quando algo mudou (criar, editar, excluir ou
+  // importar). Por isso este é o lugar certo para anotar a data da
+  // mudança, que o lembrete de cópia usa (US10).
+  gravarDataHora(CHAVE_ULTIMA_MUDANCA, new Date().toISOString());
+  return true;
 }
 
 
@@ -145,4 +156,69 @@ function salvarCompromissos(compromissos) {
 function criarId() {
   const sorteio = Math.random().toString(36).slice(2, 6).padEnd(4, "0");
   return "c-" + Date.now() + "-" + sorteio;
+}
+
+
+/* ---------------------------------------------------------
+   Etapa 2a: cópia, lembrete e importação (US08, US09, US10)
+   --------------------------------------------------------- */
+
+/* Lê uma das chaves de data e hora. Devolve o texto ISO ou null
+   (chave vazia ou localStorage indisponível). */
+function lerDataHora(chave) {
+  if (!armazenamentoDisponivel) return null;
+  try {
+    return window.localStorage.getItem(chave);
+  } catch (erro) {
+    return null;
+  }
+}
+
+/* Grava uma das chaves de data e hora. Se não der (localStorage cheio
+   ou indisponível), devolve false e a agenda segue normalmente: essas
+   datas servem só para o lembrete, nenhum compromisso se perde. */
+function gravarDataHora(chave, textoIso) {
+  if (!armazenamentoDisponivel) return false;
+  try {
+    window.localStorage.setItem(chave, textoIso);
+    return true;
+  } catch (erro) {
+    return false;
+  }
+}
+
+// Atalhos com nomes que dizem para que serve cada chave.
+function lerUltimoBackup() { return lerDataHora(CHAVE_ULTIMO_BACKUP); }
+function lerUltimaMudanca() { return lerDataHora(CHAVE_ULTIMA_MUDANCA); }
+function lerLembreteAdiadoAte() { return lerDataHora(CHAVE_LEMBRETE_ADIADO); }
+function registrarBackup(textoIso) { return gravarDataHora(CHAVE_ULTIMO_BACKUP, textoIso); }
+function adiarLembrete(textoIso) { return gravarDataHora(CHAVE_LEMBRETE_ADIADO, textoIso); }
+
+
+/* Grava a lista que veio de uma importação (US09).
+   - substituirTudo = true: ANTES de gravar, guarda o conteúdo atual de
+     "agenda:compromissos" em "agenda:compromissos-antes-da-importacao".
+     Se essa cópia de segurança não puder ser gravada, a importação para
+     aqui e nada muda (nunca trocamos a lista sem guardar o "antes").
+   - Diferente do salvarCompromissos: com o localStorage indisponível,
+     a importação FALHA (devolve false), como pede a US09. Importar só
+     na memória da página daria a falsa impressão de que os dados
+     ficaram guardados neste navegador.
+   Devolve true se gravou e false se nada mudou no que estava salvo. */
+function gravarImportacao(lista, substituirTudo) {
+  if (!armazenamentoDisponivel) return false;
+
+  if (substituirTudo) {
+    try {
+      const textoAtual = window.localStorage.getItem(CHAVE_COMPROMISSOS);
+      // Sem nada salvo ainda (primeira visita), não há o que guardar.
+      if (textoAtual !== null) {
+        window.localStorage.setItem(CHAVE_ANTES_DA_IMPORTACAO, textoAtual);
+      }
+    } catch (erro) {
+      return false;
+    }
+  }
+
+  return salvarCompromissos(lista);
 }

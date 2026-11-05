@@ -37,22 +37,36 @@
         <h1>Agenda</h1>
       </div>
 
-      <!-- No celular (< 480px) o CSS esconde " compromisso" só da tela:
-           o leitor de tela continua ouvindo "Novo compromisso". -->
-      <button class="btn btn-primario botao-novo" type="button" id="botao-novo">
-        <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
-        <span>Novo</span><span class="botao-novo-resto"> compromisso</span>
-      </button>
+      <!-- Os dois botões do topo. A ordem no HTML é a ordem do Tab:
+           "Seus dados" primeiro, "Novo compromisso" na ponta. -->
+      <div class="cabecalho-acoes">
+        <!-- Abaixo de 640px o CSS mostra só o ícone (círculo de 44px) e esconde
+             "Seus dados" só da tela: o nome do botão continua sendo "Seus dados". -->
+        <button class="btn btn-secundario botao-dados" type="button" id="botao-dados">
+          <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.5"/><path d="M4.5 5.5v13c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-13"/><path d="M4.5 12c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5"/></svg>
+          <span class="botao-dados-texto">Seus dados</span>
+        </button>
+
+        <!-- No celular (< 480px) o CSS esconde " compromisso" só da tela:
+             o leitor de tela continua ouvindo "Novo compromisso". -->
+        <button class="btn btn-primario botao-novo" type="button" id="botao-novo">
+          <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+          <span>Novo</span><span class="botao-novo-resto"> compromisso</span>
+        </button>
+      </div>
     </div>
   </header>
 
   <!-- ===== CONTEÚDO ===== -->
   <main class="container principal">
-    <!-- Avisos que ficam na tela (problemas com o localStorage). Vazio quando está tudo bem. -->
+    <!-- Avisos que ficam na tela: primeiro os problemas com o localStorage,
+         por último o lembrete de cópia (US10). Vazio quando está tudo bem. -->
     <div class="faixas" id="faixas" aria-live="polite"></div>
 
     <section class="proximos" aria-labelledby="titulo-proximos">
-      <h2 class="secao-titulo" id="titulo-proximos">Próximos compromissos</h2>
+      <!-- tabindex="-1": o título pode receber o foco pelo código (quando a faixa
+           de lembrete some com o foco dentro dela), mas não entra na ordem do Tab. -->
+      <h2 class="secao-titulo" id="titulo-proximos" tabindex="-1">Próximos compromissos</h2>
       <!-- O JavaScript monta aqui os dias com compromissos, ou a mensagem de lista vazia. -->
       <div id="lista-proximos"></div>
     </section>
@@ -162,11 +176,118 @@
     </div>
   </dialog>
 
+  <!-- ===== JANELA: SEUS DADOS (baixar e importar cópia, US08 e US09) ===== -->
+  <dialog class="janela" id="janela-dados" aria-labelledby="dados-titulo" aria-describedby="dados-texto">
+    <div class="janela-conteudo">
+      <span class="confirmar-icone confirmar-icone--ambar" aria-hidden="true">
+        <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.5"/><path d="M4.5 5.5v13c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-13"/><path d="M4.5 12c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5"/></svg>
+      </span>
+      <h2 class="janela-titulo" id="dados-titulo">Seus dados</h2>
+      <p class="confirmar-texto" id="dados-texto">Seus compromissos ficam guardados só neste navegador. Baixe uma cópia de vez em quando para não perder nada e para levar a agenda para outro aparelho.</p>
+
+      <!-- Placa "Última cópia". O JavaScript mostra um dos dois <p>:
+           com cópia, a data; sem nenhuma cópia, a frase "Você ainda não fez...". -->
+      <div class="dados-placa" id="dados-ultima">
+        <p class="dados-placa-data" id="dados-placa-data" hidden>
+          <span class="dados-placa-rotulo">Última cópia<span class="sr-only">:</span></span>
+          <time class="dados-placa-valor" id="dados-ultima-valor"></time>
+        </p>
+        <p class="dados-placa-nunca" id="dados-placa-nunca">
+          <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
+          <span>Você ainda não fez nenhuma cópia.</span>
+        </p>
+      </div>
+
+      <div class="dados-acoes">
+        <!-- autofocus: ao abrir, o foco vai para "Baixar cópia" (nada aqui apaga dados) -->
+        <button class="btn btn-primario" type="button" id="botao-baixar" autofocus>
+          <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+          Baixar cópia
+        </button>
+        <button class="btn btn-secundario" type="button" id="botao-importar" aria-describedby="dica-importar">
+          <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
+          Importar cópia
+        </button>
+      </div>
+      <p class="campo-dica" id="dica-importar">Escolha um arquivo .json baixado pela Agenda.</p>
+
+      <!-- Seletor de arquivo do sistema. Nunca aparece: o botão "Importar cópia"
+           chama .click() nele. accept = o seletor mostra só arquivos .json. -->
+      <input type="file" id="arquivo-importar" accept=".json,application/json" hidden>
+
+      <!-- Avisos da janela (região viva). Fica SEMPRE no HTML, vazia quando não há
+           aviso. Sem espaço nem quebra de linha dentro: o CSS usa :empty. -->
+      <div class="janela-aviso" id="dados-aviso" aria-live="polite"></div>
+
+      <div class="janela-acoes">
+        <button class="btn btn-secundario" type="button" data-acao="fechar">Fechar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ===== JANELA: IMPORTAR CÓPIA (abre POR CIMA de "Seus dados", US09) ===== -->
+  <dialog class="janela" id="janela-importar" aria-labelledby="importar-titulo" aria-describedby="importar-resumo">
+    <div class="janela-conteudo">
+      <span class="confirmar-icone confirmar-icone--ambar" aria-hidden="true">
+        <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M5 20h14"/></svg>
+      </span>
+      <h2 class="janela-titulo" id="importar-titulo">Importar cópia</h2>
+
+      <!-- O JavaScript escreve o resumo ("Esta cópia tem 12 compromissos." etc.) -->
+      <div class="importar-resumo" id="importar-resumo"></div>
+
+      <p class="importar-pergunta">O que fazer com eles?</p>
+
+      <div class="opcoes">
+        <div class="opcao">
+          <button class="btn btn-primario" type="button" data-acao="juntar" aria-describedby="opcao-juntar-texto" autofocus>
+            <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 3v2a7 7 0 0 0 6 7 7 7 0 0 0 6-7V3"/><path d="M12 12v8"/><path d="M8.5 17l3.5 3.5 3.5-3.5"/></svg>
+            Juntar
+          </button>
+          <p class="opcao-texto" id="opcao-juntar-texto">Acrescenta os da cópia e mantém os que já estão aqui. Nada é apagado.</p>
+        </div>
+        <div class="opcao">
+          <button class="btn btn-perigo-contorno" type="button" data-acao="substituir" aria-describedby="opcao-substituir-texto">
+            <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 8h14l-3-3"/><path d="M20 16H6l3 3"/></svg>
+            Substituir tudo
+          </button>
+          <!-- O JavaScript escreve os números: "Troca os 8 compromissos daqui pelos 12 da cópia." -->
+          <p class="opcao-texto" id="opcao-substituir-texto"></p>
+        </div>
+      </div>
+
+      <div class="janela-acoes">
+        <button class="btn btn-secundario" type="button" data-acao="cancelar">Cancelar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ===== JANELA: CONFIRMAÇÃO "SUBSTITUIR TUDO?" (por cima de "Importar cópia") ===== -->
+  <dialog class="janela janela--confirmar" id="janela-substituir" aria-labelledby="substituir-titulo" aria-describedby="substituir-texto">
+    <div class="janela-conteudo">
+      <span class="confirmar-icone" aria-hidden="true">
+        <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 8h14l-3-3"/><path d="M20 16H6l3 3"/></svg>
+      </span>
+      <h2 class="confirmar-titulo" id="substituir-titulo">Substituir tudo?</h2>
+      <!-- O JavaScript escreve o texto com os números -->
+      <p class="confirmar-texto" id="substituir-texto"></p>
+      <div class="janela-acoes">
+        <!-- autofocus: o foco começa em "Cancelar", a opção mais segura -->
+        <button class="btn btn-secundario" type="button" data-acao="cancelar" autofocus>Cancelar</button>
+        <button class="btn btn-perigo" type="button" data-acao="confirmar-substituir">
+          <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 8h14l-3-3"/><path d="M20 16H6l3 3"/></svg>
+          Substituir
+        </button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Scripts comuns (sem "type=module"), para o site funcionar também abrindo
-       o index.html direto do computador. A ordem importa: o app.js usa as
-       funções dos dois primeiros. -->
+       o index.html direto do computador. A ordem importa: cada arquivo usa
+       funções dos que vêm antes dele (o app.js usa todos). -->
   <script src="js/datas.js"></script>
   <script src="js/armazenamento.js"></script>
+  <script src="js/copia.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

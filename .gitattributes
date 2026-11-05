@@ -1,0 +1,3 @@
+# Fim de linha padrão: LF em todos os arquivos de texto,
+# no repositório e na pasta de trabalho (Windows inclusive).
+* text=auto eol=lf

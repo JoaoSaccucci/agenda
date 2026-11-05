@@ -778,6 +778,13 @@ body:has(.status:not(:empty)) {
   box-shadow: var(--sombra);
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* [Correção do dev, Etapa 2a] A barra de botões gruda no fim da janela
+     (position: sticky) e cobre o que estiver atrás dela. O scrollIntoView
+     não sabe disso: para ele, um aviso embaixo da barra já está "visível".
+     O scroll-padding diz ao navegador que os últimos 6rem (96px) da janela
+     não contam como área visível, então ele rola até o aviso ficar ACIMA
+     da barra (que tem uns 77px de altura). Vale para todas as janelas. */
+  scroll-padding-bottom: 6rem;
 }
 
 .janela::backdrop {
@@ -1005,6 +1012,287 @@ textarea.campo-controle {
 
 
 /* ---------------------------------------------------------
+   12b. ETAPA 2a: SEUS DADOS, IMPORTAÇÃO E LEMBRETE DE CÓPIA
+   Decisões em: design.md, seção 12.
+   --------------------------------------------------------- */
+
+/* --- Cabeçalho: os dois botões do topo juntos --- */
+.cabecalho-acoes {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  flex-shrink: 0;
+}
+
+/* Abaixo de 640px: só o ícone, num círculo de 44px.
+   "Seus dados" continua no HTML para o leitor de tela. */
+@media (max-width: 639.98px) {
+  .botao-dados {
+    width: 44px;
+    padding: 0;
+  }
+
+  .botao-dados-texto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+/* --- Círculo do topo da janela, em âmbar (não é perigo) --- */
+.confirmar-icone--ambar {
+  color: var(--cor-ambar);
+  background: color-mix(in srgb, var(--cor-ambar) 14%, transparent);
+}
+
+/* --- Placa "Última cópia" (mesmas duas metades da placa de hora) --- */
+.dados-placa {
+  padding: var(--esp-3) var(--esp-4);
+  background: linear-gradient(to bottom, var(--cor-superficie-2) 50%, var(--cor-placa-baixo) 50%);
+  border-radius: var(--raio-md);
+  box-shadow: inset 0 0 0 1px var(--cor-borda);
+}
+
+.dados-placa-data {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--esp-1) var(--esp-3);
+}
+
+.dados-placa-rotulo {
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cor-texto-suave);        /* 7.5:1 na placa */
+}
+
+.dados-placa-valor {
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cor-ambar);              /* 9.5:1 na placa */
+}
+
+.dados-placa-nunca {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-2);
+}
+
+.dados-placa-nunca .icone {
+  margin-top: 2px;
+  color: var(--cor-ambar);
+}
+
+/* --- Botões grandes da janela "Seus dados" --- */
+.dados-acoes {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--esp-3);
+}
+
+.dados-acoes .btn {
+  width: 100%;
+}
+
+@media (min-width: 480px) {
+  .dados-acoes {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* A dica fica colada nos botões (o gap da janela é 16px) */
+.dados-acoes + .campo-dica {
+  margin-top: calc(-1 * var(--esp-2));
+}
+
+/* --- Região de avisos dentro da janela ---
+   Fica sempre no HTML (região viva). Vazia, ela não pode usar
+   display: none; então só "devolve" o espaço do gap da janela. */
+.janela-aviso:empty {
+  margin-top: calc(-1 * var(--esp-4));
+}
+
+.janela-aviso .faixa {
+  margin-bottom: 0;
+}
+
+/* Sucesso: verde 12% sobre o card (texto 12.3:1, ícone 9.4:1) */
+.faixa--sucesso {
+  background: color-mix(in srgb, var(--cor-sucesso) 12%, var(--cor-superficie));
+  border-color: color-mix(in srgb, var(--cor-sucesso) 60%, transparent);
+}
+
+.faixa--sucesso .icone {
+  color: var(--cor-sucesso);
+}
+
+/* --- Janela de escolha da importação --- */
+.importar-resumo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+}
+
+.importar-numero {
+  font-family: var(--fonte-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cor-ambar);              /* 10.4:1 na janela */
+}
+
+.importar-ignorados {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-2);
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+.importar-ignorados .icone {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--cor-ambar);
+}
+
+.importar-atual {
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+.importar-pergunta {
+  font-weight: 600;
+}
+
+.opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-4);
+}
+
+.opcao {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+}
+
+.opcao .btn {
+  width: 100%;
+}
+
+.opcao-texto {
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+/* Leva a uma ação perigosa, mas ainda não apaga nada:
+   contorno vermelho (7.2:1), texto branco (15.8:1). */
+.btn-perigo-contorno {
+  color: var(--cor-texto);
+  background: transparent;
+  border-color: var(--cor-perigo);
+}
+
+.btn-perigo-contorno .icone {
+  color: var(--cor-perigo);
+}
+
+.btn-perigo-contorno:hover {
+  background: color-mix(in srgb, var(--cor-perigo) 12%, var(--cor-superficie));
+}
+
+/* --- Faixa de lembrete de cópia (lilás: lembrete, não problema) --- */
+.faixa--lembrete {
+  flex-wrap: wrap;
+  font-size: var(--fs-base);
+  background: color-mix(in srgb, var(--cor-lilas) 10%, var(--cor-superficie));
+  border-color: color-mix(in srgb, var(--cor-lilas) 55%, transparent);
+  border-left: 4px solid var(--cor-lilas);
+}
+
+.faixa--lembrete > .icone {
+  color: var(--cor-lilas);              /* 7.6:1 na faixa */
+}
+
+.faixa-corpo {
+  flex: 1 1 12rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.faixa-rotulo {
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cor-texto-suave);        /* 6.9:1 na faixa */
+}
+
+.faixa-texto {
+  font-weight: 600;                     /* branco: 13.2:1 na faixa */
+}
+
+.faixa-destaque {
+  font-family: var(--fonte-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cor-ambar);              /* 8.7:1 na faixa */
+}
+
+.faixa-subtexto {
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+/* Celular: botões numa linha nova, dividindo a largura;
+   se não couberem lado a lado, cada um ocupa a linha toda. */
+.faixa-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--esp-2);
+  width: 100%;
+}
+
+.faixa-acoes .btn {
+  flex: 1 1 auto;
+}
+
+@media (min-width: 640px) {
+  .faixa--lembrete {
+    align-items: center;
+  }
+
+  .faixa-acoes {
+    width: auto;
+  }
+
+  .faixa-acoes .btn {
+    flex: 0 0 auto;
+  }
+}
+
+/* O título recebe o foco quando a faixa some (tabindex="-1").
+   Só aparece o contorno se a pessoa estiver no teclado. */
+#titulo-proximos:focus:not(:focus-visible) {
+  outline: none;
+}
+
+
+/* ---------------------------------------------------------
    13. MOVIMENTO REDUZIDO
    --------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
@@ -1040,5 +1328,14 @@ textarea.campo-controle {
 
   .campo-controle[aria-invalid="true"] {
     border-width: 2px;
+  }
+
+  /* Etapa 2a */
+  .dados-placa {
+    border: 1px solid CanvasText;
+  }
+
+  .faixa--lembrete {
+    border-left-color: CanvasText;
   }
 }

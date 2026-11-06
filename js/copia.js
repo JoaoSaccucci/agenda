@@ -1,6 +1,8 @@
 /* =========================================================
    Agenda - copia.js
    Regras da cópia dos dados (Etapa 2a: US08, US09 e US10).
+   Etapa 2b: o arquivo sai na versão 2, e a importação aceita
+   cópias da versão 1 e da versão 2 (US11).
 
    Como o datas.js, este arquivo NÃO mexe na tela e NÃO toca no
    localStorage (quem faz isso é o armazenamento.js). Aqui as funções
@@ -47,7 +49,7 @@ function nomeDoArquivoDeCopia(agora) {
 function textoDoArquivoDeCopia(lista, agora) {
   const arquivo = {
     app: "agenda",
-    versao: VERSAO_FORMATO,           // 1 na Entrega 2a (vem de armazenamento.js)
+    versao: VERSAO_FORMATO,           // 2 a partir da Entrega 2b (vem de armazenamento.js)
     exportadoEm: agora.toISOString(),
     compromissos: lista
   };
@@ -63,13 +65,15 @@ function textoDoArquivoDeCopia(lista, agora) {
    localStorage (normalizarCompromisso: título, data, limites de tamanho,
    id novo se faltar), com UMA regra a mais, só da importação:
    hora fora do formato "HH:MM" faz o item ser IGNORADO (na leitura do
-   localStorage ela virava "dia todo"). Hora ausente ou null = dia todo. */
-function conferirItemDaCopia(item) {
+   localStorage ela virava "dia todo"). Hora ausente ou null = dia todo.
+   versao = a do arquivo (1 ou 2). Um item da versão 1 sai daqui já
+   convertido para a versão 2, como na migração (US11). */
+function conferirItemDaCopia(item, versao) {
   if (item !== null && typeof item === "object") {
     const semHora = item.hora === null || item.hora === undefined;
     if (!semHora && !horaValida(item.hora)) return null;
   }
-  return normalizarCompromisso(item);
+  return normalizarCompromisso(item, versao);
 }
 
 /* Milissegundos do "atualizadoEm" (para comparar qual é o mais novo).
@@ -104,7 +108,10 @@ function lerArquivoDeCopia(texto) {
   if (typeof dados.versao === "number" && dados.versao > VERSAO_FORMATO) {
     return { erro: ERRO_VERSAO_NOVA };
   }
-  if (dados.versao !== VERSAO_FORMATO || !Array.isArray(dados.compromissos)) {
+  // Etapa 2b (US11): aceita as cópias da versão 1 (Etapa 1 e Entrega 2a)
+  // e da versão 2. As da versão 1 são convertidas item por item.
+  const versaoConhecida = dados.versao === 1 || dados.versao === 2;
+  if (!versaoConhecida || !Array.isArray(dados.compromissos)) {
     return { erro: ERRO_NAO_E_COPIA };
   }
 
@@ -114,7 +121,7 @@ function lerArquivoDeCopia(texto) {
   const porId = new Map();
   let ignorados = 0;
   dados.compromissos.forEach(function (item) {
-    const certo = conferirItemDaCopia(item);
+    const certo = conferirItemDaCopia(item, dados.versao);
     if (certo === null) {
       ignorados++;
       return;

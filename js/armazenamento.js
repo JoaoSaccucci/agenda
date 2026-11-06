@@ -7,7 +7,8 @@
      localStorage com o site da Labs (mesmo endereço
      joaosaccucci.github.io), então NUNCA usamos
      localStorage.clear() e nunca mexemos em chaves de outros.
-   - Os dados ficam num objeto { versao: 1, compromissos: [...] }.
+   - Os dados ficam num objeto { versao: 2, compromissos: [...] }.
+     (Até a Entrega 2a era a versão 1; a 2b atualiza sozinha, US11.)
    - Etapa 2a: chaves novas para a cópia dos dados (US08 a US10).
    ========================================================= */
 
@@ -20,11 +21,21 @@ const CHAVE_ULTIMO_BACKUP = "agenda:ultimo-backup";                // última c�
 const CHAVE_ULTIMA_MUDANCA = "agenda:ultima-mudanca";              // última criação, edição, exclusão ou importação
 const CHAVE_LEMBRETE_ADIADO = "agenda:lembrete-backup-adiado-ate"; // até quando o lembrete fica escondido
 const CHAVE_ANTES_DA_IMPORTACAO = "agenda:compromissos-antes-da-importacao"; // lista de antes do "Substituir tudo"
-const VERSAO_FORMATO = 1;
+// Etapa 2b: o texto original da versão 1, guardado antes da migração (US11).
+const CHAVE_V1 = "agenda:compromissos-v1";
+const VERSAO_FORMATO = 2;
+
+// Situações possíveis de um compromisso (Etapa 2b, US13 e US15).
+const STATUS_VALIDOS = ["aberto", "feito", "nao-vou-fazer"];
 
 // Começa como true e vira false se o localStorage não funcionar.
 // Quando é false, a agenda funciona só na memória da página.
 let armazenamentoDisponivel = true;
+
+// Etapa 2b (US11): vira true quando os dados salvos não podem ser tocados
+// (a migração falhou ou eles são de uma versão mais nova). A agenda
+// funciona na tela, mas nada é gravado em "agenda:compromissos".
+let gravacaoBloqueada = false;
 
 
 /* Testa se dá para usar o localStorage: grava e apaga uma chave de teste.
@@ -51,34 +62,70 @@ function textoOuNulo(valor, limite) {
 }
 
 
-/* Confere UM compromisso lido do localStorage.
+/* Confere UM compromisso lido do localStorage ou de um arquivo de cópia.
+   versao = 1 ou 2: o formato em que o item foi escrito.
    - Sem título ou com data inválida: devolve null (o item é ignorado).
-   - O resto é "arrumado": hora estranha vira null (dia todo), etc.
-   Assim um item com problema não derruba os outros. */
-function normalizarCompromisso(item) {
+     Na versão 1 a data é obrigatória; na versão 2, data null = "Sem data".
+   - O resto é "arrumado": hora estranha vira null (dia todo), e um campo
+     novo da versão 2 ausente ou fora da regra recebe o valor padrão.
+   Devolve SEMPRE um item no formato da versão 2: assim um item da
+   versão 1 já sai daqui convertido (US11), com o atualizadoEm de antes.
+   Um item com problema não derruba os outros. */
+function normalizarCompromisso(item, versao) {
   if (item === null || typeof item !== "object") return null;
 
   const titulo = textoOuNulo(item.titulo, 100);
-  if (titulo === null || !dataValida(item.data)) return null;
+  if (titulo === null) return null;
+
+  const semData = versao === 2 && item.data === null;
+  if (!semData && !dataValida(item.data)) return null;
+
+  const data = semData ? null : item.data;
+  // Sem data, também não há hora (seção 3).
+  const hora = data !== null && horaValida(item.hora) ? item.hora : null;
+  // Sem data, o item é sempre "aberto".
+  const status = data !== null && STATUS_VALIDOS.includes(item.status) ? item.status : "aberto";
 
   return {
     id: typeof item.id === "string" && item.id !== "" ? item.id : criarId(),
     titulo: titulo,
-    data: item.data,
-    hora: horaValida(item.hora) ? item.hora : null,
+    data: data,
+    hora: hora,
     local: textoOuNulo(item.local, 100),
     observacao: textoOuNulo(item.observacao, 500),
+    // Etapa 2b. Só vale com hora; inteiro de 1 a 720.
+    antecedenciaMin: hora !== null && antecedenciaValida(item.antecedenciaMin) ? item.antecedenciaMin : null,
+    // Só pode ser true se o item tiver data.
+    cobrar: data !== null && item.cobrar === true,
+    status: status,
+    // Só tem valor quando o item foi resolvido ("feito" ou "nao-vou-fazer").
+    concluidoEm: status !== "aberto" && isoParaData(item.concluidoEm) !== null ? item.concluidoEm : null,
+    // Reservados para a Etapa 3: na Etapa 2 são sempre null e [].
+    duracaoMin: null,
+    itens: [],
     criadoEm: typeof item.criadoEm === "string" ? item.criadoEm : null,
     atualizadoEm: typeof item.atualizadoEm === "string" ? item.atualizadoEm : null
   };
 }
 
+/* Tempo para sair (US12): número inteiro de 1 a 720 minutos (12 horas). */
+function antecedenciaValida(valor) {
+  return Number.isInteger(valor) && valor >= 1 && valor <= 720;
+}
+
 
 /* Lê os compromissos salvos.
-   Devolve { compromissos: [...], problema: null | "indisponivel" | "corrompido" }.
+   Devolve { compromissos: [...], problema: ... }. O problema pode ser:
+   - null: tudo certo;
+   - "indisponivel": não dá para usar o localStorage;
+   - "corrompido": o dado salvo não era um JSON no formato certo;
+   - "migracao-falhou": dados da versão 1 que não puderam ser
+     atualizados para a versão 2 (US11);
+   - "versao-nova": dados de uma versão mais nova que a 2 (US11).
    Quem chama (app.js) decide qual aviso mostrar. */
 function carregarCompromissos() {
   armazenamentoDisponivel = testarArmazenamento();
+  gravacaoBloqueada = false;
   if (!armazenamentoDisponivel) {
     return { compromissos: [], problema: "indisponivel" };
   }
@@ -97,20 +144,66 @@ function carregarCompromissos() {
     dados = null;
   }
 
+  const ehObjeto = dados !== null && typeof dados === "object" && !Array.isArray(dados);
+
+  // Versão mais nova que a nossa (US11): NÃO mexemos nesse dado. A agenda
+  // mostra o que conseguir ler, mas não grava nada por cima dele.
+  if (ehObjeto && typeof dados.versao === "number" && dados.versao > VERSAO_FORMATO) {
+    gravacaoBloqueada = true;
+    const lista = Array.isArray(dados.compromissos) ? conferirLista(dados.compromissos, VERSAO_FORMATO) : [];
+    return { compromissos: lista, problema: "versao-nova" };
+  }
+
   // O formato esperado é um objeto com a lista em "compromissos".
-  const formatoCerto = dados !== null && typeof dados === "object" && Array.isArray(dados.compromissos);
-  if (!formatoCerto) {
+  if (!ehObjeto || !Array.isArray(dados.compromissos)) {
     guardarCopiaCorrompida(texto);
     return { compromissos: [], problema: "corrompido" };
   }
 
-  // Lista boa: confere item por item e joga fora só os que têm problema.
-  const compromissos = [];
-  dados.compromissos.forEach(function (item) {
-    const certo = normalizarCompromisso(item);
-    if (certo !== null) compromissos.push(certo);
+  // Versão 2: confere item por item e joga fora só os que têm problema.
+  if (dados.versao === VERSAO_FORMATO) {
+    return { compromissos: conferirLista(dados.compromissos, 2), problema: null };
+  }
+
+  // Versão 1 (a da Etapa 1 e da Entrega 2a): atualiza para a versão 2.
+  return migrarDaVersao1(texto, conferirLista(dados.compromissos, 1));
+}
+
+
+/* Confere uma lista de itens e devolve só os que estão certos. */
+function conferirLista(itens, versao) {
+  const certos = [];
+  itens.forEach(function (item) {
+    const certo = normalizarCompromisso(item, versao);
+    if (certo !== null) certos.push(certo);
   });
-  return { compromissos: compromissos, problema: null };
+  return certos;
+}
+
+
+/* Migração da versão 1 para a versão 2 (US11).
+   texto = o texto ORIGINAL de "agenda:compromissos";
+   lista = os compromissos já convertidos (normalizarCompromisso).
+   Ordem que protege os dados:
+   1. guarda o texto original, sem nenhuma mudança, em
+      "agenda:compromissos-v1" (se essa chave já existir, não mexe nela);
+   2. só depois grava a versão 2 em "agenda:compromissos".
+   Se algum passo falhar (localStorage cheio), nada mais é gravado
+   enquanto a página estiver aberta: a agenda mostra os compromissos
+   convertidos só na tela, e o que estava salvo continua intacto. */
+function migrarDaVersao1(texto, lista) {
+  try {
+    if (window.localStorage.getItem(CHAVE_V1) === null) {
+      window.localStorage.setItem(CHAVE_V1, texto);
+    }
+    // gravarLista, e não salvarCompromissos: a migração não é uma mudança
+    // feita pela pessoa, então não conta para o lembrete de cópia (US10).
+    gravarLista(lista);
+  } catch (erro) {
+    gravacaoBloqueada = true;
+    return { compromissos: lista, problema: "migracao-falhou" };
+  }
+  return { compromissos: lista, problema: null };
 }
 
 
@@ -127,23 +220,32 @@ function guardarCopiaCorrompida(texto) {
 }
 
 
-/* Grava a lista inteira. Devolve true se deu certo e false se não deu
-   (ex.: localStorage cheio). Se o localStorage está indisponível, não
-   tenta gravar e devolve true: a agenda segue só na memória da página
-   (o aviso disso já aparece desde que a página abriu). */
-function salvarCompromissos(compromissos) {
-  if (!armazenamentoDisponivel) return true;
-
+/* Grava a lista inteira no formato da versão 2. Pode dar erro
+   (localStorage cheio): quem chama trata o erro. */
+function gravarLista(compromissos) {
   const dados = { versao: VERSAO_FORMATO, compromissos: compromissos };
+  window.localStorage.setItem(CHAVE_COMPROMISSOS, JSON.stringify(dados));
+}
+
+
+/* Grava a lista depois de uma mudança feita pela pessoa. Devolve true se
+   deu certo e false se não deu (ex.: localStorage cheio). Se o localStorage
+   está indisponível, ou se a gravação está bloqueada (US11), não tenta
+   gravar e devolve true: a agenda segue só na memória da página (o aviso
+   disso já aparece desde que a página abriu). */
+function salvarCompromissos(compromissos) {
+  if (!armazenamentoDisponivel || gravacaoBloqueada) return true;
+
   try {
-    window.localStorage.setItem(CHAVE_COMPROMISSOS, JSON.stringify(dados));
+    gravarLista(compromissos);
   } catch (erro) {
     // O setItem falhou, então o que estava salvo antes continua lá, intacto.
     return false;
   }
-  // A lista só é gravada quando algo mudou (criar, editar, excluir ou
-  // importar). Por isso este é o lugar certo para anotar a data da
-  // mudança, que o lembrete de cópia usa (US10).
+  // A lista só é gravada quando algo mudou (criar, editar, excluir,
+  // importar, marcar Feito ou "Não vou fazer" e desfazer). Por isso este
+  // é o lugar certo para anotar a data da mudança, que o lembrete de
+  // cópia usa (US10).
   gravarDataHora(CHAVE_ULTIMA_MUDANCA, new Date().toISOString());
   return true;
 }
@@ -206,7 +308,9 @@ function adiarLembrete(textoIso) { return gravarDataHora(CHAVE_LEMBRETE_ADIADO, 
      ficaram guardados neste navegador.
    Devolve true se gravou e false se nada mudou no que estava salvo. */
 function gravarImportacao(lista, substituirTudo) {
-  if (!armazenamentoDisponivel) return false;
+  // Com a gravação bloqueada (US11) a importação também falha: ela não
+  // pode escrever por cima dos dados que a agenda não conseguiu atualizar.
+  if (!armazenamentoDisponivel || gravacaoBloqueada) return false;
 
   if (substituirTudo) {
     try {

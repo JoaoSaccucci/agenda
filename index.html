@@ -63,6 +63,18 @@
          por último o lembrete de cópia (US10). Vazio quando está tudo bem. -->
     <div class="faixas" id="faixas" aria-live="polite"></div>
 
+    <!-- Etapa 2b (US14): compromissos com "Me cobrar" que passaram sem "Feito".
+         Fica sempre aberta, acima da lista principal. Sem pendências, fica escondida. -->
+    <section class="pendentes" id="secao-pendentes" aria-labelledby="titulo-pendentes" hidden>
+      <h2 class="pendentes-titulo" id="titulo-pendentes">
+        <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 1.5"/><path d="M5 3L2.5 5.5M19 3l2.5 2.5"/></svg>
+        <span>Ficou pendente</span> <span class="pendentes-contagem" id="contagem-pendentes">(0)</span>
+      </h2>
+      <p class="pendentes-texto">Passou da data e você pediu para ser cobrado.</p>
+      <!-- O JavaScript monta aqui os itens (lista simples, sem grupos por dia). -->
+      <ul class="compromissos" id="lista-pendentes"></ul>
+    </section>
+
     <section class="proximos" aria-labelledby="titulo-proximos">
       <!-- tabindex="-1": o título pode receber o foco pelo código (quando a faixa
            de lembrete some com o foco dentro dela), mas não entra na ordem do Tab. -->
@@ -71,7 +83,20 @@
       <div id="lista-proximos"></div>
     </section>
 
-    <!-- Compromissos que já passaram. Sem nenhum, a seção inteira fica escondida (hidden). -->
+    <!-- Etapa 2b (US16): itens anotados "Ainda sem data". Mesmo jeito de "Anteriores":
+         começa recolhida e, sem nenhum item, a seção inteira fica escondida. -->
+    <section class="sem-data" id="secao-sem-data" aria-labelledby="titulo-sem-data" hidden>
+      <h2 class="anteriores-titulo" id="titulo-sem-data">
+        <button class="anteriores-botao" id="botao-sem-data" type="button" aria-expanded="false" aria-controls="lista-sem-data">
+          <span><span>Sem data</span> <span class="anteriores-contagem" id="contagem-sem-data">(0)</span></span>
+          <svg class="icone anteriores-seta" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </h2>
+      <div class="anteriores-lista" id="lista-sem-data" hidden></div>
+    </section>
+
+    <!-- Compromissos que já passaram (e, a partir da 2b, os marcados como "Feito"
+         ou "Não vou fazer"). Sem nenhum, a seção inteira fica escondida (hidden). -->
     <section class="anteriores" id="secao-anteriores" aria-labelledby="titulo-anteriores" hidden>
       <h2 class="anteriores-titulo" id="titulo-anteriores">
         <button class="anteriores-botao" id="botao-anteriores" type="button" aria-expanded="false" aria-controls="lista-anteriores">
@@ -105,6 +130,8 @@
   <dialog class="janela" id="janela-compromisso" aria-labelledby="janela-titulo">
     <form class="janela-conteudo" id="form-compromisso" novalidate>
       <h2 class="janela-titulo" id="janela-titulo">Novo compromisso</h2>
+      <!-- Etapa 2b: só aparece no modo "Remarcar compromisso" (US15), com a data antiga. -->
+      <p class="janela-subtitulo" id="janela-subtitulo" hidden>Era para: <span class="compromisso-era-valor" id="janela-subtitulo-valor"></span></p>
 
       <div class="campo">
         <label class="campo-rotulo" for="campo-titulo">Título <span class="campo-obrigatorio">(obrigatório)</span></label>
@@ -117,18 +144,64 @@
 
       <div class="campos-linha">
         <div class="campo">
-          <label class="campo-rotulo" for="campo-data">Data <span class="campo-obrigatorio">(obrigatório)</span></label>
+          <!-- "(obrigatório)" some quando "Ainda sem data" está marcada (US02, 2b). -->
+          <label class="campo-rotulo" for="campo-data">Data <span class="campo-obrigatorio" id="data-obrigatorio">(obrigatório)</span></label>
           <input class="campo-controle" id="campo-data" name="data" type="date">
           <p class="campo-erro" id="erro-data" hidden>
             <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
             <span>Escolha uma data.</span>
           </p>
+          <!-- Etapa 2b (US16): marcada, desativa e limpa Data e Hora. -->
+          <label class="marcar" for="campo-sem-data">
+            <input class="marcar-caixa" type="checkbox" id="campo-sem-data" name="semData">
+            <span>Ainda sem data</span>
+          </label>
         </div>
         <div class="campo">
           <label class="campo-rotulo" for="campo-hora">Hora</label>
           <input class="campo-controle" id="campo-hora" name="hora" type="time" aria-describedby="dica-hora">
           <p class="campo-dica" id="dica-hora">Deixe em branco para um compromisso do dia todo.</p>
         </div>
+      </div>
+
+      <!-- Etapa 2b (US12): "Tempo para sair". Grupo de escolha única com botões de
+           opção de verdade (as setas do teclado trocam a opção). Sem hora, o JavaScript
+           põe "disabled" no fieldset (desativa tudo de uma vez) e mostra a dica,
+           ligada por aria-describedby só enquanto ela aparece. -->
+      <fieldset class="grupo" id="grupo-sair">
+        <legend class="campo-rotulo">Tempo para sair</legend>
+        <p class="campo-dica" id="dica-sair" hidden>Escolha uma hora para usar o tempo para sair.</p>
+        <div class="escolhas">
+          <label class="escolha"><input type="radio" name="antecedencia" value="" checked><span>Nenhum</span></label>
+          <label class="escolha"><input type="radio" name="antecedencia" value="15"><span>15 min</span></label>
+          <label class="escolha"><input type="radio" name="antecedencia" value="30"><span>30 min</span></label>
+          <label class="escolha"><input type="radio" name="antecedencia" value="45"><span>45 min</span></label>
+          <label class="escolha"><input type="radio" name="antecedencia" value="60"><span>60 min</span></label>
+          <label class="escolha"><input type="radio" name="antecedencia" value="outro"><span>Outro</span></label>
+        </div>
+        <!-- Só aparece com "Outro". data-dica: a dica que fica ligada ao campo
+             mesmo quando o erro aparece (aria-describedby com as duas). -->
+        <div class="campo campo-minutos" id="bloco-minutos" hidden>
+          <label class="campo-rotulo" for="campo-minutos">Minutos antes</label>
+          <div class="campo-com-sufixo">
+            <input class="campo-controle" id="campo-minutos" name="minutos" type="number" inputmode="numeric" min="1" max="720" step="1" aria-describedby="dica-minutos" data-dica="dica-minutos">
+            <span class="campo-sufixo" aria-hidden="true">min</span>
+          </div>
+          <p class="campo-dica" id="dica-minutos">De 1 a 720 minutos (12 horas).</p>
+          <p class="campo-erro" id="erro-minutos" hidden>
+            <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
+            <span>Digite um número de minutos entre 1 e 720.</span>
+          </p>
+        </div>
+      </fieldset>
+
+      <!-- Etapa 2b (US14): "Me cobrar". Sem data, fica desativada. -->
+      <div class="campo">
+        <label class="marcar" for="campo-cobrar">
+          <input class="marcar-caixa" type="checkbox" id="campo-cobrar" name="cobrar" aria-describedby="dica-cobrar">
+          <span>Me cobrar se eu não fizer</span>
+        </label>
+        <p class="campo-dica campo-dica--marcar" id="dica-cobrar">Se a data passar sem você marcar Feito, ele fica em 'Ficou pendente'.</p>
       </div>
 
       <div class="campo">

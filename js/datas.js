@@ -80,8 +80,10 @@ function diasEntre(textoInicio, textoFim) {
 /* Regra "quando um compromisso passou" (seção 3 dos requisitos):
    - com hora: passou quando o relógio está DEPOIS do minuto marcado.
      Um compromisso às 10:00 ainda está na lista às 10:00 e passa às 10:01.
-   - dia todo: passou a partir da meia-noite do dia seguinte. */
+   - dia todo: passou a partir da meia-noite do dia seguinte.
+   - sem data (Etapa 2b): nunca passa. */
 function compromissoPassou(compromisso, agora) {
+  if (compromisso.data === null) return false;
   let limite;
   if (compromisso.hora) {
     limite = textoParaData(compromisso.data, compromisso.hora);
@@ -144,5 +146,77 @@ function dataComAno(data) {
 /* Date -> "2026-11-05T18:10" (hora LOCAL), o formato do atributo
    datetime da tag <time>. */
 function dataHoraParaAtributo(data) {
-  return dataParaTexto(data) + "T" + doisDigitos(data.getHours()) + ":" + doisDigitos(data.getMinutes());
+  return dataParaTexto(data) + "T" + horaParaTexto(data);
+}
+
+
+/* Date -> "08:50" (hora LOCAL, 24h). */
+function horaParaTexto(data) {
+  return doisDigitos(data.getHours()) + ":" + doisDigitos(data.getMinutes());
+}
+
+
+/* ---------------------------------------------------------
+   Etapa 2b: onde cada item aparece e "Sair às" (US12 a US16)
+   --------------------------------------------------------- */
+
+/* Em qual seção da página o compromisso aparece (requisitos, seção 3,
+   "Onde cada item aparece"). As perguntas são feitas NESTA ordem e vale
+   a primeira que bater. Devolve "sem-data", "anteriores", "pendentes"
+   ou "proximos". */
+function secaoDoCompromisso(compromisso, agora) {
+  if (compromisso.data === null) return "sem-data";
+  if (compromisso.status === "feito" || compromisso.status === "nao-vou-fazer") return "anteriores";
+  if (compromissoPassou(compromisso, agora)) {
+    return compromisso.cobrar ? "pendentes" : "anteriores";
+  }
+  return "proximos";
+}
+
+
+/* Situação mostrada em "Anteriores": "Feito", "Não vou fazer" ou "Passou". */
+function situacaoDoCompromisso(compromisso) {
+  if (compromisso.status === "feito") return { classe: "feito", texto: "Feito" };
+  if (compromisso.status === "nao-vou-fazer") return { classe: "nao-vou-fazer", texto: "Não vou fazer" };
+  return { classe: "passou", texto: "Passou" };
+}
+
+
+// "Sair em X min" começa 15 minutos antes da hora de sair (US12).
+const MINUTOS_DE_AVISO_PARA_SAIR = 15;
+
+/* "Sair às..." de um compromisso (US12). Devolve null se o compromisso
+   não tem hora ou não tem tempo para sair. Senão devolve:
+   - estado: "normal" | "logo" | "passou" (vira o data-estado no HTML);
+   - horaSair: o Date da hora de sair;
+   - diaAnterior: true se a hora de sair cai no dia anterior;
+   - minutos: no estado "logo", quantos minutos faltam (0 = "Sair agora").
+
+   As contas usam o MINUTO atual, sem os segundos (como a regra do
+   "passou"): às 08:35 faltam 15 min para sair às 08:50, às 08:49 falta
+   1 min, às 08:50 é "Sair agora" e às 08:51 a hora de sair já passou. */
+function calcularSairAs(compromisso, agora) {
+  if (!compromisso.data || !compromisso.hora || !compromisso.antecedenciaMin) return null;
+
+  const horaSair = textoParaData(compromisso.data, compromisso.hora);
+  // setMinutes com número negativo "volta" o relógio, até para o dia anterior.
+  horaSair.setMinutes(horaSair.getMinutes() - compromisso.antecedenciaMin);
+
+  const minutoAtual = new Date(agora);
+  minutoAtual.setSeconds(0, 0);   // tira segundos e milissegundos
+  const faltam = Math.round((horaSair - minutoAtual) / 60000);   // em minutos
+
+  let estado = "normal";
+  if (faltam < 0) {
+    estado = "passou";
+  } else if (faltam <= MINUTOS_DE_AVISO_PARA_SAIR) {
+    estado = "logo";
+  }
+
+  return {
+    estado: estado,
+    horaSair: horaSair,
+    diaAnterior: dataParaTexto(horaSair) !== compromisso.data,
+    minutos: estado === "logo" ? faltam : null
+  };
 }

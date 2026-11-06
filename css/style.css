@@ -626,28 +626,33 @@ body:has(.status:not(:empty)) {
   border-left: 2px solid var(--cor-borda);
 }
 
-/* Botões: embaixo do texto. A margem negativa alinha o texto
-   "Editar" com o título (o botão tem 12px de espaço interno). */
+/* Botões numa faixa própria (2b: até 4 botões não cabem mais à direita).
+   Celular: embaixo do card todo, com um tracejado em cima (o "canhoto").
+   As margens negativas dão 8px a mais de cada lado: o texto do botão
+   fica alinhado com a borda da placa. */
 .compromisso-acoes {
-  grid-column: 2;
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: var(--esp-2);
-  margin-left: calc(-1 * var(--esp-3));
+  margin-inline: calc(-1 * var(--esp-2));
+  padding-top: var(--esp-1);
+  border-top: 1px dashed var(--cor-borda);
 }
 
+/* Computador: placa | texto, e os botões embaixo do texto */
 @media (min-width: 640px) {
   .compromisso {
-    grid-template-columns: 4.75rem minmax(0, 1fr) auto;
-    gap: var(--esp-4);
+    grid-template-columns: 4.75rem minmax(0, 1fr);
+    gap: var(--esp-2) var(--esp-4);
     padding: var(--esp-4);
   }
 
   .compromisso-acoes {
-    grid-column: 3;
-    grid-row: 1;
-    flex-wrap: nowrap;
-    margin-left: 0;
+    grid-column: 2;
+    margin-inline: calc(-1 * var(--esp-3)) 0;   /* "Feito" alinhado com o título */
+    padding-top: 0;
+    border-top: 0;
   }
 }
 
@@ -787,6 +792,15 @@ body:has(.status:not(:empty)) {
   scroll-padding-bottom: 6rem;
 }
 
+/* [Etapa 2b, design 13.11.2] Abaixo de 360px uma barra pode empilhar os
+   botões (≈133px de altura): reservamos 9rem (144px) para o aviso nunca
+   ficar atrás dela. */
+@media (max-width: 359.98px) {
+  .janela {
+    scroll-padding-bottom: 9rem;
+  }
+}
+
 .janela::backdrop {
   background: rgba(8, 5, 12, 0.72);
   backdrop-filter: blur(3px);
@@ -832,7 +846,7 @@ body:has(.status:not(:empty)) {
 }
 
 .janela-acoes .btn {
-  flex: 1 1 8rem;               /* celular: dividem a largura */
+  flex: 1 1 6rem;               /* celular: dividem a largura (antes 8rem: empilhava a 320px) */
 }
 
 @media (min-width: 480px) {
@@ -1293,6 +1307,407 @@ textarea.campo-controle {
 
 
 /* ---------------------------------------------------------
+   12c. ETAPA 2b: SAIR ÀS, FEITO, PENDÊNCIAS E SEM DATA
+   Decisões em: design.md, seção 13.
+   --------------------------------------------------------- */
+
+/* --- Linha de meta: "Sair às", "Cobrar" e a situação --- */
+.compromisso-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esp-1) var(--esp-3);
+  margin-block: 2px;
+}
+
+/* --- "Sair às 08:50" (3 estados, US12) --- */
+.compromisso-sair {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-1);
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);          /* 8.2:1 no card */
+}
+
+.compromisso-sair .icone {
+  width: 16px;
+  height: 16px;
+  color: var(--cor-ambar);
+}
+
+.compromisso-sair-hora {
+  font-family: var(--fonte-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cor-ambar);                /* 10.4:1 no card */
+}
+
+/* "Sair em 12 min": pílula âmbar cheia, texto escuro (10.5:1) */
+.compromisso-sair[data-estado="logo"] {
+  padding: 2px var(--esp-3) 2px var(--esp-2);
+  font-weight: 700;
+  color: var(--cor-sobre-cor);
+  background: var(--cor-ambar);
+  border-radius: var(--raio-pill);
+}
+
+.compromisso-sair[data-estado="logo"] .icone {
+  color: currentColor;
+}
+
+/* "Hora de sair: 08:50 (já passou)": tudo cinza */
+.compromisso-sair[data-estado="passou"] .icone,
+.compromisso-sair[data-estado="passou"] .compromisso-sair-hora {
+  color: var(--cor-texto-suave);
+}
+
+/* O card acende em âmbar enquanto está na hora de sair (enfeite) */
+.compromisso:has(.compromisso-sair[data-estado="logo"]) {
+  border-color: color-mix(in srgb, var(--cor-ambar) 70%, var(--cor-borda));
+}
+
+/* --- Selos: "Cobrar" e a situação em "Anteriores" --- */
+.selo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-1);
+  min-height: 1.5rem;
+  padding: 1px var(--esp-2);
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid color-mix(in srgb, currentColor 55%, transparent);
+  border-radius: var(--raio-pill);
+}
+
+.selo .icone {
+  width: 14px;
+  height: 14px;
+}
+
+.selo--cobrar        { color: var(--cor-ambar); }        /* 10.4:1 */
+.selo--feito         { color: var(--cor-sucesso); }      /* 11.1:1 no pior ponto */
+.selo--nao-vou-fazer { color: var(--cor-lilas); }        /* 8.2:1 no pior ponto */
+.selo--passou {
+  color: var(--cor-texto-suave);                         /* 7.5:1 no pior ponto */
+  border-style: dashed;
+}
+
+/* --- Botões novos do card (só o ícone tem cor) --- */
+.botao-item--feito .icone {
+  color: var(--cor-sucesso);              /* 12.3:1 no card */
+}
+
+.botao-item--feito:hover {
+  color: var(--cor-sucesso);              /* 11.2:1 no hover */
+  border-color: color-mix(in srgb, var(--cor-sucesso) 50%, transparent);
+}
+
+.botao-item--agendar .icone {
+  color: var(--cor-ambar);
+}
+
+.botao-item--agendar:hover {
+  color: var(--cor-ambar);                /* 9.5:1 no hover */
+  border-color: color-mix(in srgb, var(--cor-ambar) 50%, transparent);
+}
+
+/* --- "Ficou pendente": a plataforma dos atrasados --- */
+.pendentes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+  margin-bottom: var(--esp-7);
+  padding: var(--esp-4) var(--esp-3) var(--esp-3);
+  background: color-mix(in srgb, var(--cor-ambar) 7%, var(--cor-fundo));
+  border: 1px solid color-mix(in srgb, var(--cor-ambar) 45%, transparent);
+  border-left: 4px solid var(--cor-ambar);
+  border-radius: var(--raio-lg);
+}
+
+@media (min-width: 640px) {
+  .pendentes {
+    padding: var(--esp-5) var(--esp-4) var(--esp-4);
+  }
+}
+
+.pendentes-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--esp-2);
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cor-ambar);                /* 9.9:1 no painel */
+}
+
+.pendentes-titulo .icone {
+  width: 18px;
+  height: 18px;
+}
+
+.pendentes-contagem {
+  font-weight: 400;
+  color: var(--cor-texto-suave);          /* 7.8:1 no painel */
+}
+
+.pendentes-texto {
+  margin-top: calc(-1 * var(--esp-1));
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+/* "Era para: Ontem · 09:30" (pendência e subtítulo do Remarcar) */
+.compromisso-era {
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+.compromisso-era-valor {
+  font-family: var(--fonte-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cor-ambar);                /* 10.4:1 no card */
+}
+
+/* --- "Sem data": mesma cara de "Anteriores" --- */
+.sem-data {
+  margin-top: var(--esp-7);
+  padding-top: var(--esp-5);
+  border-top: 1px dashed var(--cor-borda);
+}
+
+/* Com "Sem data" na tela, "Anteriores" cola nela (um bloco só) */
+.sem-data:not([hidden]) + .anteriores {
+  margin-top: var(--esp-5);
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Placa vazia e tracejada: ainda não tem horário no quadro */
+.compromisso-hora--sem-data {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cor-lilas);                /* 9.0:1 no card */
+  background: transparent;
+  box-shadow: none;
+  border: 1px dashed color-mix(in srgb, var(--cor-lilas) 55%, transparent);
+}
+
+.compromisso-hora--sem-data > span {
+  width: min-content;                     /* "SEM / DATA" em duas linhas */
+}
+
+/* --- Formulário: caixa de marcar com 44px de toque --- */
+.marcar {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  font-size: var(--fs-base);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.marcar-caixa {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 1.375rem;                        /* 22px */
+  height: 1.375rem;
+  margin: 0;
+  background: var(--cor-fundo) center / 1rem no-repeat;
+  border: 2px solid var(--cor-borda-campo);   /* 4.6:1 na janela */
+  border-radius: var(--raio-sm);
+  cursor: pointer;
+  transition: background-color var(--transicao), border-color var(--transicao);
+}
+
+.marcar:hover .marcar-caixa {
+  border-color: var(--cor-texto-suave);
+}
+
+/* Marcada: âmbar cheio + check escuro (o check é a diferença, não só a cor) */
+.marcar-caixa:checked {
+  background-color: var(--cor-ambar);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231A1205' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+  border-color: var(--cor-ambar);
+}
+
+.marcar-caixa:focus-visible {
+  outline: 3px solid var(--cor-foco);
+  outline-offset: 2px;
+}
+
+.marcar:has(.marcar-caixa:disabled) {
+  color: var(--cor-texto-suave);
+  cursor: not-allowed;
+}
+
+.marcar-caixa:disabled,
+.marcar:hover .marcar-caixa:disabled {
+  border-style: dashed;
+  border-color: var(--cor-borda-campo);
+  cursor: not-allowed;
+}
+
+/* Dica alinhada com o texto da caixa (22px + 12px) */
+.campo-dica--marcar {
+  margin-top: calc(-1 * var(--esp-2));
+  padding-left: calc(1.375rem + var(--esp-3));
+}
+
+/* --- Campo desativado (Data e Hora com "Ainda sem data") --- */
+.campo-controle:disabled,
+.campo-controle:disabled:hover {
+  color: var(--cor-texto-suave);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--cor-borda-campo);
+  cursor: not-allowed;
+}
+
+/* --- "Tempo para sair": fieldset com as plaquinhas --- */
+.grupo {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+}
+
+.grupo > legend {
+  padding: 0;
+  margin-bottom: var(--esp-2);            /* o gap não vale para o legend */
+}
+
+.escolhas {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--esp-2);
+}
+
+.escolha {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 var(--esp-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--cor-texto);
+  background: var(--cor-fundo);
+  border: 1px solid var(--cor-borda-campo);
+  border-radius: var(--raio-md);
+  cursor: pointer;
+  transition: background-color var(--transicao), border-color var(--transicao);
+}
+
+/* O radio de verdade fica invisível POR CIMA da plaquinha:
+   toque, clique, teclado e leitor de tela funcionam normalmente. */
+.escolha input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.escolha:hover {
+  background: var(--cor-superficie-2);
+  border-color: var(--cor-texto-suave);
+}
+
+.escolha:has(input:focus-visible) {
+  outline: 3px solid var(--cor-foco);
+  outline-offset: 2px;
+}
+
+.escolha:has(input:checked) {
+  color: var(--cor-sobre-cor);            /* 10.5:1 */
+  background: var(--cor-ambar);
+  border-color: var(--cor-ambar);
+}
+
+/* Check antes do texto da marcada */
+.escolha:has(input:checked)::before {
+  content: "";
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Grupo desativado (sem hora ou sem data) */
+.grupo:disabled .escolha,
+.grupo:disabled .escolha:hover {
+  color: var(--cor-texto-suave);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--cor-borda-campo);
+  cursor: not-allowed;
+}
+
+.grupo:disabled .escolha:has(input:checked) {
+  color: var(--cor-texto);
+  background: var(--cor-superficie-2);
+}
+
+/* Campo de minutos ("Outro") */
+.campo-minutos {
+  margin-top: var(--esp-1);
+}
+
+.campo-com-sufixo {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+}
+
+.campo-com-sufixo .campo-controle {
+  width: 7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.campo-sufixo {
+  font-family: var(--fonte-mono);
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+/* --- Subtítulo da janela no modo "Remarcar compromisso" --- */
+.janela-subtitulo {
+  margin-top: calc(-1 * var(--esp-3));
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+}
+
+/* --- Aviso flutuante de alerta ("Compromisso continua pendente.") --- */
+.status[data-tipo="alerta"] {
+  border-left-color: var(--cor-ambar);
+}
+
+
+/* ---------------------------------------------------------
    13. MOVIMENTO REDUZIDO
    --------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
@@ -1337,5 +1752,29 @@ textarea.campo-controle {
 
   .faixa--lembrete {
     border-left-color: CanvasText;
+  }
+
+  /* Etapa 2b */
+  .selo,
+  .escolha,
+  .pendentes,
+  .compromisso-hora--sem-data,
+  .compromisso-sair[data-estado="logo"] {
+    border: 1px solid CanvasText;
+  }
+
+  .escolha:has(input:checked) {
+    border: 3px solid Highlight;
+  }
+
+  .escolha:has(input:checked)::before {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+
+  /* a caixa de marcar volta a ser a do sistema (o check desenhado sumiria) */
+  .marcar-caixa {
+    appearance: auto;
+    -webkit-appearance: auto;
   }
 }

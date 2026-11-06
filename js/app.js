@@ -7,6 +7,8 @@
    que são carregados antes deste arquivo no index.html.
    Etapa 2a: janela "Seus dados" (baixar e importar cópia)
    e faixa de lembrete de cópia (seções 10 a 12).
+   Etapa 2b: "Ficou pendente", "Sem data", "Sair às...", Feito,
+   Desfazer, "Não vou fazer", Remarcar e Agendar (seções 5, 8 e 9b).
 
    Regra de segurança (US01): tudo o que a pessoa digita entra
    na página com textContent, NUNCA com innerHTML. Assim um
@@ -23,6 +25,10 @@ let compromissos = [];
 
 // id do compromisso que está sendo editado (null = criando um novo).
 let idEmEdicao = null;
+
+// Etapa 2b: com que "cara" o formulário abriu:
+// "novo", "editar", "remarcar" (US15) ou "agendar" (US16).
+let modoDoFormulario = "novo";
 
 // id do compromisso que a confirmação de exclusão vai apagar.
 let idParaExcluir = null;
@@ -65,6 +71,15 @@ const contagemAnteriores = document.getElementById("contagem-anteriores");
 const listaAnteriores = document.getElementById("lista-anteriores");
 const avisoStatus = document.getElementById("status");
 
+// Etapa 2b: "Ficou pendente" e "Sem data"
+const secaoPendentes = document.getElementById("secao-pendentes");
+const contagemPendentes = document.getElementById("contagem-pendentes");
+const listaPendentes = document.getElementById("lista-pendentes");
+const secaoSemData = document.getElementById("secao-sem-data");
+const botaoSemData = document.getElementById("botao-sem-data");
+const contagemSemData = document.getElementById("contagem-sem-data");
+const listaSemData = document.getElementById("lista-sem-data");
+
 const janelaCompromisso = document.getElementById("janela-compromisso");
 const formulario = document.getElementById("form-compromisso");
 const tituloDaJanela = document.getElementById("janela-titulo");
@@ -76,6 +91,19 @@ const campoObs = document.getElementById("campo-obs");
 const erroTitulo = document.getElementById("erro-titulo");
 const erroData = document.getElementById("erro-data");
 const erroSalvar = document.getElementById("erro-salvar");
+
+// Etapa 2b: campos novos do formulário
+const subtituloDaJanela = document.getElementById("janela-subtitulo");
+const valorDoSubtitulo = document.getElementById("janela-subtitulo-valor");
+const dataObrigatorio = document.getElementById("data-obrigatorio");
+const campoSemData = document.getElementById("campo-sem-data");
+const grupoSair = document.getElementById("grupo-sair");
+const dicaSair = document.getElementById("dica-sair");
+const opcoesDeSaida = grupoSair.querySelectorAll('input[name="antecedencia"]');
+const blocoMinutos = document.getElementById("bloco-minutos");
+const campoMinutos = document.getElementById("campo-minutos");
+const erroMinutos = document.getElementById("erro-minutos");
+const campoCobrar = document.getElementById("campo-cobrar");
 
 const janelaExcluir = document.getElementById("janela-excluir");
 const tituloExcluir = document.getElementById("excluir-titulo");
@@ -116,7 +144,16 @@ const ICONES = {
   // Etapa 2a (design, seção 12.8)
   check: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
   baixar: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
-  historico: '<path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>'
+  historico: '<path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>',
+  // Etapa 2b (design, seção 13.10). O nome é o mesmo do data-acao do botão.
+  feito: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  desfazer: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  remarcar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M9 15.5h6.5M13.5 13l2.5 2.5-2.5 2.5"/>',
+  "nao-vou-fazer": '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+  agendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M12 13v5M9.5 15.5h5"/>',
+  sair: '<path d="M13 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h7"/><path d="M15 8l4 4-4 4M19 12H10"/>',
+  cobrar: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  passou: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
 };
 
 // Ilustração da lista vazia (design, seção 8.3). Também é texto fixo.
@@ -181,6 +218,24 @@ function compararNoMesmoDia(a, b) {
   return a.titulo.localeCompare(b.titulo, "pt-BR", { sensitivity: "base" });
 }
 
+/* "Ficou pendente" (US14): da mais antiga para a mais recente (data e
+   hora). No mesmo dia, vale a ordem da lista principal. */
+function compararPorDataEHora(a, b) {
+  if (a.data !== b.data) return a.data < b.data ? -1 : 1;
+  return compararNoMesmoDia(a, b);
+}
+
+/* "Sem data" (US16): do mais antigo para o mais novo, pelo criadoEm.
+   Um item sem criadoEm (não deveria acontecer) vai para o fim. */
+function compararPorCriacao(a, b) {
+  const criadoA = isoParaData(a.criadoEm);
+  const criadoB = isoParaData(b.criadoEm);
+  const tempoA = criadoA === null ? Infinity : criadoA.getTime();
+  const tempoB = criadoB === null ? Infinity : criadoB.getTime();
+  if (tempoA !== tempoB) return tempoA < tempoB ? -1 : 1;
+  return a.titulo.localeCompare(b.titulo, "pt-BR", { sensitivity: "base" });
+}
+
 /* Junta os compromissos por data.
    Devolve [{ data: "2026-11-14", itens: [...] }, ...] na ordem pedida:
    do dia mais próximo para o mais distante, ou ao contrário
@@ -204,33 +259,164 @@ function agruparPorDia(lista, diaMaisRecentePrimeiro) {
 
 /* ---------------------------------------------------------
    5. DESENHAR A LISTA
+   Etapa 2b: cada compromisso aparece em UMA de quatro seções
+   (secaoDoCompromisso, em datas.js): "pendentes", "proximos",
+   "sem-data" ou "anteriores". A seção decide a cara do card
+   e os botões que ele tem.
    --------------------------------------------------------- */
 
-/* Um compromisso (design, seção 6.3). */
-function criarItem(compromisso, ehAnterior) {
-  const item = criarElemento("li", ehAnterior ? "compromisso compromisso--anterior" : "compromisso");
-  item.dataset.id = compromisso.id;
-  // tabindex -1: o item pode receber foco pelo código (depois de excluir
-  // o vizinho), mas não entra na ordem do Tab.
-  item.tabIndex = -1;
+/* Botões de cada card, nesta ordem (design, seção 13.4.3):
+   a ação principal primeiro e "Excluir" sempre por último. */
+function acoesDoItem(compromisso, secao) {
+  if (secao === "pendentes") return ["feito", "remarcar", "nao-vou-fazer", "excluir"];
+  if (secao === "sem-data") return ["agendar", "editar", "excluir"];
+  if (secao === "anteriores" && compromisso.status !== "aberto") return ["desfazer", "editar", "excluir"];
+  return ["feito", "editar", "excluir"];   // lista principal e "Anteriores" com "Passou"
+}
 
-  // Placa de hora (ou "Dia todo")
+// Texto visível de cada botão do card.
+const TEXTOS_DOS_BOTOES = {
+  feito: "Feito",
+  desfazer: "Desfazer",
+  remarcar: "Remarcar",
+  "nao-vou-fazer": "Não vou fazer",
+  agendar: "Agendar",
+  editar: "Editar",
+  excluir: "Excluir"
+};
+
+// Classe extra do card em cada seção.
+const CLASSE_DA_SECAO = {
+  proximos: "",
+  pendentes: " compromisso--pendente",
+  "sem-data": " compromisso--sem-data",
+  anteriores: " compromisso--anterior"
+};
+
+
+/* Placa da esquerda: a hora, "Dia todo" ou "Sem data". */
+function criarPlaca(compromisso) {
+  if (compromisso.data === null) {
+    // Placa vazia e tracejada (design, seção 13.6). O <span> deixa o CSS
+    // quebrar o texto em "SEM / DATA".
+    const placa = criarElemento("div", "compromisso-hora compromisso-hora--sem-data");
+    placa.appendChild(criarElemento("span", null, "Sem data"));
+    return placa;
+  }
   if (compromisso.hora) {
     const placa = criarElemento("div", "compromisso-hora");
     const tempo = criarElemento("time", null, compromisso.hora);
     tempo.dateTime = compromisso.data + "T" + compromisso.hora;
     placa.appendChild(tempo);
-    item.appendChild(placa);
+    return placa;
+  }
+  // O texto fica num <span> para o CSS conseguir quebrar em "DIA / TODO".
+  const placa = criarElemento("div", "compromisso-hora compromisso-hora--dia-todo");
+  placa.appendChild(criarElemento("span", null, "Dia todo"));
+  return placa;
+}
+
+
+/* Selo pequeno ("Cobrar", "Feito", "Não vou fazer", "Passou").
+   O ícone é enfeite: a informação está sempre no texto. */
+function criarSelo(classe, icone) {
+  const selo = criarElemento("p", "selo selo--" + classe);
+  selo.appendChild(criarIcone(icone));
+  return selo;
+}
+
+
+/* Escreve a linha "Sair às..." (US12) num <p class="compromisso-sair">.
+   Ela é usada ao desenhar o card e, a cada minuto, para trocar só o
+   texto (sem redesenhar a lista). Sem aria-live: a mudança não é lida
+   pelo leitor de tela a cada minuto. */
+function preencherSairAs(linha, sair) {
+  linha.dataset.estado = sair.estado;
+  const texto = criarElemento("span");
+
+  if (sair.estado === "logo") {
+    texto.textContent = sair.minutos === 0 ? "Sair agora" : "Sair em " + sair.minutos + " min";
   } else {
-    // O texto fica num <span> para o CSS conseguir quebrar em "DIA / TODO".
-    const placa = criarElemento("div", "compromisso-hora compromisso-hora--dia-todo");
-    placa.appendChild(criarElemento("span", null, "Dia todo"));
-    item.appendChild(placa);
+    const hora = criarElemento("time", "compromisso-sair-hora", horaParaTexto(sair.horaSair));
+    hora.dateTime = dataHoraParaAtributo(sair.horaSair);
+    if (sair.estado === "normal") {
+      texto.append("Sair às ", hora, sair.diaAnterior ? " do dia anterior" : "");
+    } else {
+      texto.append("Hora de sair: ", hora, " (já passou)");
+    }
+  }
+  linha.replaceChildren(criarIcone("sair"), texto);
+}
+
+
+/* Linha de "meta", logo abaixo do título (design, seção 13.4.1):
+   - lista principal: "Sair às..." e o selo "Cobrar" (só se tiver algum);
+   - "Anteriores": a situação ("Feito", "Não vou fazer" ou "Passou").
+   Devolve null quando não há nada para mostrar (nada de espaço vazio). */
+function criarMeta(compromisso, secao, agora) {
+  const meta = criarElemento("div", "compromisso-meta");
+
+  if (secao === "proximos") {
+    const sair = calcularSairAs(compromisso, agora);
+    if (sair) {
+      const linha = criarElemento("p", "compromisso-sair");
+      preencherSairAs(linha, sair);
+      meta.appendChild(linha);
+    }
+    if (compromisso.cobrar) {
+      const selo = criarSelo("cobrar", "cobrar");
+      selo.append("Cobrar", criarElemento("span", "sr-only", " se eu não fizer"));
+      meta.appendChild(selo);
+    }
   }
 
-  // Texto: título, e local e observação só se estiverem preenchidos.
+  if (secao === "anteriores") {
+    const situacao = situacaoDoCompromisso(compromisso);
+    const icone = situacao.classe === "nao-vou-fazer" ? "nao-vou-fazer" : situacao.classe;
+    const selo = criarSelo(situacao.classe, icone);
+    selo.append(criarElemento("span", "sr-only", "Situação: "), situacao.texto);
+    meta.appendChild(selo);
+  }
+
+  return meta.children.length > 0 ? meta : null;
+}
+
+
+/* "Ontem · 09:30" ou "Ter, 11/11 · Dia todo": quando era a pendência.
+   Usado no card de "Ficou pendente" e no subtítulo do "Remarcar".
+   O "·" é enfeite; o leitor de tela ouve "Ontem, 09:30". */
+function criarValorEra(compromisso, agora) {
+  const valor = criarElemento("span", "compromisso-era-valor", tituloDoDia(compromisso.data, agora, false).texto);
+  const ponto = criarElemento("span", null, " · ");
+  ponto.setAttribute("aria-hidden", "true");
+  valor.append(ponto, criarElemento("span", "sr-only", ", "), compromisso.hora || "Dia todo");
+  return valor;
+}
+
+
+/* Um compromisso (design, seções 6.3 e 13.4). secao = onde ele aparece. */
+function criarItem(compromisso, secao, agora) {
+  const item = criarElemento("li", "compromisso" + CLASSE_DA_SECAO[secao]);
+  item.dataset.id = compromisso.id;
+  // tabindex -1: o item pode receber foco pelo código (depois de excluir
+  // o vizinho), mas não entra na ordem do Tab.
+  item.tabIndex = -1;
+
+  item.appendChild(criarPlaca(compromisso));
+
+  // Texto: título, a linha de meta (ou "Era para:"), e local e
+  // observação só se estiverem preenchidos.
   const corpo = criarElemento("div", "compromisso-corpo");
   corpo.appendChild(criarElemento("p", "compromisso-titulo", compromisso.titulo));
+
+  const meta = criarMeta(compromisso, secao, agora);
+  if (meta) corpo.appendChild(meta);
+
+  if (secao === "pendentes") {
+    const era = criarElemento("p", "compromisso-era");
+    era.append(criarElemento("span", null, "Era para:"), " ", criarValorEra(compromisso, agora));
+    corpo.appendChild(era);
+  }
 
   if (compromisso.local) {
     const local = criarElemento("p", "compromisso-local");
@@ -248,39 +434,56 @@ function criarItem(compromisso, ehAnterior) {
   }
   item.appendChild(corpo);
 
-  // Botões. O texto visível é "Editar"/"Excluir"; o título vai escondido
-  // (sr-only), então o leitor de tela ouve "Editar Dentista".
   const acoes = criarElemento("div", "compromisso-acoes");
-  acoes.appendChild(criarBotaoDoItem("editar", "Editar", compromisso.titulo));
-  acoes.appendChild(criarBotaoDoItem("excluir", "Excluir", compromisso.titulo));
+  acoesDoItem(compromisso, secao).forEach(function (acao) {
+    acoes.appendChild(criarBotaoDoItem(acao, compromisso.titulo));
+  });
   item.appendChild(acoes);
 
   return item;
 }
 
-function criarBotaoDoItem(acao, textoVisivel, titulo) {
-  const classe = acao === "excluir" ? "botao-item botao-item--perigo" : "botao-item";
+/* Um botão do card. O texto visível é "Editar", "Feito"...; o título vai
+   escondido (sr-only), então o leitor de tela ouve "Editar Dentista". */
+function criarBotaoDoItem(acao, titulo) {
+  let classe = "botao-item";
+  if (acao === "excluir") classe += " botao-item--perigo";
+  if (acao === "feito") classe += " botao-item--feito";
+  if (acao === "agendar") classe += " botao-item--agendar";
+
   const botao = criarElemento("button", classe);
   botao.type = "button";
   botao.dataset.acao = acao;
   botao.appendChild(criarIcone(acao));
-  botao.appendChild(document.createTextNode(textoVisivel));
-  botao.appendChild(criarElemento("span", "sr-only", " " + titulo));
+  botao.appendChild(document.createTextNode(TEXTOS_DOS_BOTOES[acao]));
+
+  if (acao === "feito") {
+    // "Feito: marcar Dentista como feito" (design, seção 13.4.3).
+    // Aqui usamos aria-label, e não o <span class="sr-only">: como no "Depois"
+    // da faixa de lembrete, o pedaço escondido ganharia um espaço antes
+    // (o leitor de tela ouviria "Feito : marcar..."). O aria-label continua
+    // começando pelo texto visível, o que ajuda quem usa comando de voz.
+    botao.setAttribute("aria-label", "Feito: marcar " + titulo + " como feito");
+  } else {
+    botao.appendChild(criarElemento("span", "sr-only", " " + titulo));
+  }
   return botao;
 }
 
 
 /* Um dia com os seus compromissos (design, seção 6.2).
-   prefixo = "proximos" ou "anteriores": o mesmo dia (ex.: hoje) pode
-   aparecer nas duas listas, e um id não pode se repetir na página. */
-function criarDia(grupo, agora, ehAnterior, prefixo) {
+   secao = "proximos" ou "anteriores": o mesmo dia (ex.: hoje) pode
+   aparecer nas duas listas, e um id não pode se repetir na página,
+   por isso o nome da seção entra no id do título. */
+function criarDia(grupo, agora, secao) {
+  const ehAnterior = secao === "anteriores";
   const titulo = tituloDoDia(grupo.data, agora, !ehAnterior);
-  const idDoTitulo = prefixo + "-dia-" + grupo.data;
+  const idDoTitulo = secao + "-dia-" + grupo.data;
 
-  const secao = criarElemento("section", "dia");
+  const elemento = criarElemento("section", "dia");
   // Só o "Hoje" da lista principal ganha a cor âmbar.
-  if (!ehAnterior && titulo.texto === "Hoje") secao.classList.add("dia--hoje");
-  secao.setAttribute("aria-labelledby", idDoTitulo);
+  if (!ehAnterior && titulo.texto === "Hoje") elemento.classList.add("dia--hoje");
+  elemento.setAttribute("aria-labelledby", idDoTitulo);
 
   const h3 = criarElemento("h3", "dia-titulo", titulo.texto);
   h3.id = idDoTitulo;
@@ -292,14 +495,14 @@ function criarDia(grupo, agora, ehAnterior, prefixo) {
     contagem.appendChild(document.createTextNode(titulo.contagem));
     h3.appendChild(contagem);
   }
-  secao.appendChild(h3);
+  elemento.appendChild(h3);
 
   const ul = criarElemento("ul", "compromissos");
   grupo.itens.forEach(function (compromisso) {
-    ul.appendChild(criarItem(compromisso, ehAnterior));
+    ul.appendChild(criarItem(compromisso, secao, agora));
   });
-  secao.appendChild(ul);
-  return secao;
+  elemento.appendChild(ul);
+  return elemento;
 }
 
 
@@ -320,59 +523,81 @@ function criarVazio() {
 }
 
 
-/* Separa os compromissos em "por vir" e "anteriores", de acordo com a hora atual. */
-function separarPorMomento(agora) {
-  const proximos = [];
-  const anteriores = [];
+/* Separa os compromissos pelas quatro seções, de acordo com a hora atual. */
+function separarPorSecao(agora) {
+  const secoes = { pendentes: [], proximos: [], "sem-data": [], anteriores: [] };
   compromissos.forEach(function (compromisso) {
-    if (compromissoPassou(compromisso, agora)) {
-      anteriores.push(compromisso);
-    } else {
-      proximos.push(compromisso);
-    }
+    secoes[secaoDoCompromisso(compromisso, agora)].push(compromisso);
   });
-  return { proximos: proximos, anteriores: anteriores };
+  return secoes;
 }
 
 
 /* Resumo do que a tela mostra: o dia de hoje (para "Amanhã" virar
-   "Hoje" depois da meia-noite) + quais compromissos já passaram. */
+   "Hoje" e "Hoje" virar "Ontem" depois da meia-noite) + em que seção
+   está cada compromisso (para ele mudar de seção quando passa). */
 function calcularResumo(agora) {
-  const passados = separarPorMomento(agora).anteriores.map(function (c) { return c.id; });
-  return hojeEmTexto(agora) + "|" + passados.sort().join(",");
+  const lugares = compromissos.map(function (c) {
+    return c.id + ":" + secaoDoCompromisso(c, agora);
+  });
+  return hojeEmTexto(agora) + "|" + lugares.sort().join(",");
 }
 
 
-/* Redesenha as duas listas a partir da memória. */
+/* Lista simples, sem grupos por dia ("Ficou pendente" e "Sem data"). */
+function preencherListaSimples(ul, itens, secao, agora) {
+  itens.forEach(function (compromisso) {
+    ul.appendChild(criarItem(compromisso, secao, agora));
+  });
+}
+
+
+/* Redesenha as quatro seções a partir da memória. */
 function desenharLista() {
   const agora = new Date();
-  const separados = separarPorMomento(agora);
+  const secoes = separarPorSecao(agora);
 
   // Se o foco estava num compromisso, anotamos qual para devolver o foco
   // depois de redesenhar (senão ele "cairia" no topo da página).
   const focoAntes = lembrarFocoNaLista();
 
+  // "Ficou pendente" (US14): sempre aberta; sem pendências, some.
+  listaPendentes.replaceChildren();
+  secaoPendentes.hidden = secoes.pendentes.length === 0;
+  contagemPendentes.textContent = "(" + secoes.pendentes.length + ")";
+  preencherListaSimples(listaPendentes, secoes.pendentes.sort(compararPorDataEHora), "pendentes", agora);
+
   // Lista principal
   listaProximos.replaceChildren();
-  if (separados.proximos.length === 0) {
+  if (secoes.proximos.length === 0) {
+    // Continua vazia mesmo se houver itens sem data (US16).
     listaProximos.appendChild(criarVazio());
   } else {
     const dias = criarElemento("div", "dias");
-    agruparPorDia(separados.proximos, false).forEach(function (grupo) {
-      dias.appendChild(criarDia(grupo, agora, false, "proximos"));
+    agruparPorDia(secoes.proximos, false).forEach(function (grupo) {
+      dias.appendChild(criarDia(grupo, agora, "proximos"));
     });
     listaProximos.appendChild(dias);
   }
 
-  // Anteriores: sem nenhum, a seção inteira some (US06).
-  // O estado aberto/fechado não muda aqui: só o botão muda isso.
+  // "Sem data" (US16) e "Anteriores" (US06): sem nenhum item, a seção
+  // inteira some. O estado aberto/fechado não muda aqui: só o botão muda isso.
+  listaSemData.replaceChildren();
+  secaoSemData.hidden = secoes["sem-data"].length === 0;
+  contagemSemData.textContent = "(" + secoes["sem-data"].length + ")";
+  if (secoes["sem-data"].length > 0) {
+    const ul = criarElemento("ul", "compromissos");
+    preencherListaSimples(ul, secoes["sem-data"].sort(compararPorCriacao), "sem-data", agora);
+    listaSemData.appendChild(ul);
+  }
+
   listaAnteriores.replaceChildren();
-  secaoAnteriores.hidden = separados.anteriores.length === 0;
-  contagemAnteriores.textContent = "(" + separados.anteriores.length + ")";
-  if (separados.anteriores.length > 0) {
+  secaoAnteriores.hidden = secoes.anteriores.length === 0;
+  contagemAnteriores.textContent = "(" + secoes.anteriores.length + ")";
+  if (secoes.anteriores.length > 0) {
     const dias = criarElemento("div", "dias");
-    agruparPorDia(separados.anteriores, true).forEach(function (grupo) {
-      dias.appendChild(criarDia(grupo, agora, true, "anteriores"));
+    agruparPorDia(secoes.anteriores, true).forEach(function (grupo) {
+      dias.appendChild(criarDia(grupo, agora, "anteriores"));
     });
     listaAnteriores.appendChild(dias);
   }
@@ -383,12 +608,22 @@ function desenharLista() {
 }
 
 
-/* A cada minuto (e quando a aba volta a ficar visível): se algo passou
-   ou o dia virou, redesenha. Se nada mudou, deixa a tela quieta. */
+/* A cada minuto (e quando a aba volta a ficar visível): se algum
+   compromisso mudou de seção ou o dia virou, redesenha tudo. Se não,
+   troca só o texto das linhas "Sair às..." (US12), sem redesenhar a
+   lista: assim o foco e o leitor de tela não são incomodados. */
 function atualizarSeMudou() {
-  if (calcularResumo(new Date()) !== resumoDaTela) {
+  const agora = new Date();
+  if (calcularResumo(agora) !== resumoDaTela) {
     desenharLista();
+    return;
   }
+  listaProximos.querySelectorAll(".compromisso-sair").forEach(function (linha) {
+    const id = linha.closest(".compromisso").dataset.id;
+    const compromisso = compromissos.find(function (c) { return c.id === id; });
+    const sair = compromisso ? calcularSairAs(compromisso, agora) : null;
+    if (sair) preencherSairAs(linha, sair);
+  });
 }
 
 /* Agenda a próxima conferência para logo depois da virada do minuto
@@ -422,21 +657,68 @@ function lembrarFocoNaLista() {
   return { id: item.dataset.id, acao: ativo.dataset.acao || "item" };
 }
 
-/* Põe o foco num compromisso: no botão pedido ("editar"/"excluir")
-   ou no próprio item ("item"). Se ele estiver dentro de "Anteriores"
-   fechado, o foco vai para o botão "Anteriores"; se ele não existir
-   mais, vai para o botão "Novo compromisso". */
+/* Acha o card de um compromisso na página (ou null). */
+function acharItem(id, dentroDe) {
+  return (dentroDe || areaPrincipal).querySelector('.compromisso[data-id="' + CSS.escape(id) + '"]');
+}
+
+/* Põe o foco num compromisso: no botão pedido ("editar", "feito"...)
+   ou no próprio item ("item"). Se o card não tem esse botão (ex.: não há
+   "Editar" em "Ficou pendente"), o foco vai para o próprio item.
+   Se ele estiver dentro de "Sem data" ou "Anteriores" fechados, o foco vai
+   para o botão que abre a seção; se ele não existir mais, vai para o
+   botão "Novo compromisso". */
 function focarCompromisso(id, acao) {
-  const item = areaPrincipal.querySelector('.compromisso[data-id="' + CSS.escape(id) + '"]');
+  const item = acharItem(id);
   if (!item) {
     botaoNovo.focus();
     return;
   }
-  const alvo = acao === "item" ? item : item.querySelector('[data-acao="' + acao + '"]');
+  const alvo = (acao !== "item" && item.querySelector('[data-acao="' + acao + '"]')) || item;
   if (estaVisivel(alvo)) {
     alvo.focus();
-  } else if (!secaoAnteriores.hidden) {
-    botaoAnteriores.focus();
+    return;
+  }
+  // .sem-data e .anteriores usam o mesmo botão de abrir (.anteriores-botao).
+  const secaoFechada = item.closest(".sem-data, .anteriores");
+  const botaoDeAbrir = secaoFechada ? secaoFechada.querySelector(".anteriores-botao") : null;
+  if (estaVisivel(botaoDeAbrir)) {
+    botaoDeAbrir.focus();
+  } else {
+    botaoNovo.focus();
+  }
+}
+
+/* Em qual das quatro listas o compromisso está agora (ou null). */
+function listaQueContem(id) {
+  return [listaPendentes, listaProximos, listaSemData, listaAnteriores].find(function (lista) {
+    return acharItem(id, lista) !== null;
+  }) || null;
+}
+
+/* Depois de excluir, marcar Feito etc., o foco vai para o próximo
+   compromisso da mesma lista (US05 e US13). Aqui descobrimos qual é
+   ele, ANTES de a lista mudar. */
+function idDoProximoNaLista(id) {
+  const lista = listaQueContem(id);
+  if (!lista) return null;
+  const itens = Array.from(lista.querySelectorAll(".compromisso"));
+  const posicao = itens.findIndex(function (item) { return item.dataset.id === id; });
+  const proximo = itens[posicao + 1];
+  return proximo ? proximo.dataset.id : null;
+}
+
+/* Foco depois que um compromisso pode ter mudado de seção (US13, US15).
+   - Saiu da lista em que estava: vai para o próximo compromisso dessa
+     lista ou, se não houver, para "Novo compromisso".
+   - Continuou na mesma lista (ex.: "Feito" num item de "Anteriores", que
+     continua em "Anteriores"): vai para o botão "acaoSeFicou" do próprio
+     card redesenhado (ex.: o "Desfazer" que acabou de aparecer). */
+function focarDepoisDeMudar(id, listaDeOnde, idSeguinte, acaoSeFicou) {
+  if (listaDeOnde && acharItem(id, listaDeOnde)) {
+    focarCompromisso(id, acaoSeFicou);
+  } else if (idSeguinte) {
+    focarCompromisso(idSeguinte, "item");
   } else {
     botaoNovo.focus();
   }
@@ -499,67 +781,186 @@ function mostrarFaixa(tipo, texto) {
 
 
 /* ---------------------------------------------------------
-   8. FORMULÁRIO (criar e editar)
+   8. FORMULÁRIO (criar, editar, remarcar e agendar)
+   É sempre o mesmo formulário. Na Etapa 2b ele ganhou "Ainda sem
+   data" (US16), "Tempo para sair" (US12) e "Me cobrar" (US14), e
+   abre também como "Remarcar compromisso" (US15) e "Agendar
+   compromisso" (US16).
    --------------------------------------------------------- */
+
+// Título da janela em cada modo.
+const TITULOS_DO_FORMULARIO = {
+  novo: "Novo compromisso",
+  editar: "Editar compromisso",
+  remarcar: "Remarcar compromisso",
+  agendar: "Agendar compromisso"
+};
+
+// Opções fixas do "Tempo para sair". Outro valor aparece em "Outro".
+const OPCOES_DE_SAIDA = ["15", "30", "45", "60"];
+
 
 /* Mostra o erro de um campo: texto visível + aria-invalid + aria-describedby.
    O aria-describedby só é ligado enquanto o erro aparece: alguns navegadores
-   leem a descrição mesmo quando o texto está escondido. */
+   leem a descrição mesmo quando o texto está escondido. Se o campo tem uma
+   dica fixa (data-dica, ex.: minutos), ela continua ligada junto com o erro. */
 function mostrarErro(campo, erro) {
   erro.hidden = false;
   campo.setAttribute("aria-invalid", "true");
-  campo.setAttribute("aria-describedby", erro.id);
+  campo.setAttribute("aria-describedby", campo.dataset.dica ? campo.dataset.dica + " " + erro.id : erro.id);
 }
 
 function esconderErro(campo, erro) {
   erro.hidden = true;
   campo.removeAttribute("aria-invalid");
-  campo.removeAttribute("aria-describedby");
+  if (campo.dataset.dica) {
+    campo.setAttribute("aria-describedby", campo.dataset.dica);
+  } else {
+    campo.removeAttribute("aria-describedby");
+  }
 }
 
-/* compromisso = null para criar um novo, ou o compromisso a editar. */
-function abrirFormulario(compromisso, botao) {
+
+/* Qual opção do "Tempo para sair" está marcada: "", "15"... ou "outro". */
+function opcaoDeSaidaMarcada() {
+  const marcada = Array.from(opcoesDeSaida).find(function (opcao) { return opcao.checked; });
+  return marcada ? marcada.value : "";
+}
+
+/* Marca a opção que corresponde a um antecedenciaMin salvo (US12):
+   null = "Nenhum"; 15/30/45/60 = a plaquinha; outro número = "Outro". */
+function marcarOpcaoDeSaida(minutos) {
+  let valor = "";
+  if (minutos !== null) {
+    valor = OPCOES_DE_SAIDA.includes(String(minutos)) ? String(minutos) : "outro";
+  }
+  opcoesDeSaida.forEach(function (opcao) { opcao.checked = opcao.value === valor; });
+  campoMinutos.value = valor === "outro" ? String(minutos) : "";
+}
+
+/* Os minutos digitados em "Outro", se forem um número inteiro de 1 a 720.
+   Senão, null. (Um campo type="number" com texto inválido entrega "".) */
+function minutosDigitados() {
+  const texto = campoMinutos.value.trim();
+  if (!/^\d+$/.test(texto)) return null;
+  const minutos = Number(texto);
+  return antecedenciaValida(minutos) ? minutos : null;
+}
+
+
+/* Liga e desliga os campos que dependem de outros (US12, US14 e US16):
+   - "Ainda sem data" marcada: Data e Hora desativadas e vazias,
+     "(obrigatório)" some, "Me cobrar" desativada;
+   - sem hora (ou sem data): "Tempo para sair" desativado, com a dica;
+   - "Outro" marcado: aparece o campo de minutos.
+   Roda ao abrir o formulário e a cada mudança nesses campos. */
+function atualizarCamposDependentes() {
+  const semData = campoSemData.checked;
+
+  campoData.disabled = semData;
+  campoHora.disabled = semData;
+  dataObrigatorio.hidden = semData;
+  if (semData) {
+    campoData.value = "";
+    campoHora.value = "";
+    esconderErro(campoData, erroData);   // sem data, "Escolha uma data." não vale
+  }
+
+  // Um fieldset com "disabled" desativa de uma vez as plaquinhas e o
+  // campo de minutos. A opção marcada continua marcada (fica cinza).
+  const temHora = !semData && campoHora.value !== "";
+  grupoSair.disabled = !temHora;
+  dicaSair.hidden = temHora;
+  if (temHora) {
+    grupoSair.removeAttribute("aria-describedby");
+  } else {
+    grupoSair.setAttribute("aria-describedby", "dica-sair");
+  }
+
+  const outro = opcaoDeSaidaMarcada() === "outro";
+  blocoMinutos.hidden = !outro;
+  if (!temHora || !outro) esconderErro(campoMinutos, erroMinutos);   // o campo não vale agora
+
+  campoCobrar.disabled = semData;
+}
+
+
+/* Abre o formulário.
+   compromisso = null para criar um novo, ou o compromisso a mudar.
+   modo = "novo", "editar", "remarcar" ou "agendar". */
+function abrirFormulario(compromisso, botao, modo) {
   botaoQueAbriu = botao;
   focoDepoisDeFechar = null;
-  formulario.reset();
+  modoDoFormulario = modo;
+  formulario.reset();   // limpa os campos e volta as caixas e opções ao padrão
   erroSalvar.hidden = true;
   esconderErro(campoTitulo, erroTitulo);
   esconderErro(campoData, erroData);
+  esconderErro(campoMinutos, erroMinutos);
+
+  tituloDaJanela.textContent = TITULOS_DO_FORMULARIO[modo];
+  subtituloDaJanela.hidden = modo !== "remarcar";
 
   if (compromisso) {
     idEmEdicao = compromisso.id;
-    tituloDaJanela.textContent = "Editar compromisso";
     campoTitulo.value = compromisso.titulo;
-    campoData.value = compromisso.data;
+    campoSemData.checked = compromisso.data === null;
+    campoData.value = compromisso.data || "";
     campoHora.value = compromisso.hora || "";
+    marcarOpcaoDeSaida(compromisso.antecedenciaMin);
+    campoCobrar.checked = compromisso.cobrar;
     campoLocal.value = compromisso.local || "";
     campoObs.value = compromisso.observacao || "";
+
+    if (modo === "agendar") {
+      // US16: "Ainda sem data" desmarcada e a Data com o dia de hoje.
+      campoSemData.checked = false;
+      campoData.value = hojeEmTexto(new Date());
+    }
+    if (modo === "remarcar") {
+      // "Era para: Ontem · 09:30" (design, seção 13.8.3)
+      valorDoSubtitulo.replaceChildren(...criarValorEra(compromisso, new Date()).childNodes);
+    }
   } else {
     idEmEdicao = null;
-    tituloDaJanela.textContent = "Novo compromisso";
     campoData.value = hojeEmTexto(new Date());   // a data já vem com hoje
   }
 
+  atualizarCamposDependentes();
+
   // showModal(): abre por cima da página; Esc fecha e o Tab fica preso dentro.
   janelaCompromisso.showModal();
-  campoTitulo.focus();
+  // Remarcar e Agendar: a pessoa veio mudar a data, então o foco vai para ela.
+  if (modo === "remarcar" || modo === "agendar") {
+    campoData.focus();
+  } else {
+    campoTitulo.focus();
+  }
 }
 
 /* Confere os campos. Devolve true se está tudo certo. */
 function validarFormulario() {
+  const semData = campoSemData.checked;
   const tituloOk = campoTitulo.value.trim() !== "";
   // Data vazia ou incompleta: o navegador entrega "" no value.
-  const dataOk = dataValida(campoData.value);
+  // Com "Ainda sem data", a data não é obrigatória (US16).
+  const dataOk = semData || dataValida(campoData.value);
+  // O campo de minutos só vale com hora e com "Outro" marcado (US12).
+  const usaMinutos = !semData && campoHora.value !== "" && opcaoDeSaidaMarcada() === "outro";
+  const minutosOk = !usaMinutos || minutosDigitados() !== null;
 
   if (tituloOk) esconderErro(campoTitulo, erroTitulo); else mostrarErro(campoTitulo, erroTitulo);
   if (dataOk) esconderErro(campoData, erroData); else mostrarErro(campoData, erroData);
+  if (minutosOk) esconderErro(campoMinutos, erroMinutos); else mostrarErro(campoMinutos, erroMinutos);
 
-  // O foco vai para o primeiro campo com problema.
+  // O foco vai para o primeiro campo com problema, na ordem do formulário.
   let campoComErro = null;
   if (!tituloOk) {
     campoComErro = campoTitulo;
   } else if (!dataOk) {
     campoComErro = campoData;
+  } else if (!minutosOk) {
+    campoComErro = campoMinutos;
   }
   if (campoComErro) {
     campoComErro.focus();
@@ -569,7 +970,68 @@ function validarFormulario() {
     // para dentro da tela. "nearest" = rola o mínimo necessário.
     campoComErro.closest(".campo").scrollIntoView({ block: "nearest" });
   }
-  return tituloOk && dataOk;
+  return tituloOk && dataOk && minutosOk;
+}
+
+/* Os dados digitados, no formato da versão 2 (seção 3 dos requisitos). */
+function lerCamposDoFormulario() {
+  const semData = campoSemData.checked;
+  // O campo de hora entrega "HH:MM" (às vezes com segundos: cortamos em 5 letras).
+  const textoHora = !semData && campoHora.value ? campoHora.value.slice(0, 5) : null;
+  const hora = horaValida(textoHora) ? textoHora : null;   // sem hora = dia todo
+
+  // Tempo para sair: só com hora. Apagou a hora, o tempo para sair vai junto.
+  let antecedenciaMin = null;
+  if (hora !== null) {
+    const opcao = opcaoDeSaidaMarcada();
+    if (opcao === "outro") antecedenciaMin = minutosDigitados();
+    else if (opcao !== "") antecedenciaMin = Number(opcao);
+  }
+
+  return {
+    titulo: campoTitulo.value.trim(),
+    data: semData ? null : campoData.value,      // null = "Sem data"
+    hora: hora,
+    local: textoOuNulo(campoLocal.value, 100),     // vazio vira null
+    observacao: textoOuNulo(campoObs.value, 500),
+    antecedenciaMin: antecedenciaMin,
+    cobrar: !semData && campoCobrar.checked        // sem data, nunca cobra
+  };
+}
+
+/* O aviso depois de salvar. Depende do modo do formulário e de para
+   onde o compromisso foi (secaoDoCompromisso). Devolve { texto, tipo }. */
+function avisoDoFormulario(modo, antes, depois, agora) {
+  const secao = secaoDoCompromisso(depois, agora);
+  const sucesso = function (texto) { return { texto: texto, tipo: "sucesso" }; };
+
+  if (modo === "novo") {
+    if (secao === "sem-data") return sucesso("Anotado em Sem data.");
+    // Data ou hora no passado é permitido: ele vai direto para "Anteriores".
+    if (secao === "anteriores") return sucesso("Compromisso salvo em Anteriores.");
+    // [Interpretação do dev] Os requisitos não trazem o texto para um item
+    // NOVO, com "Me cobrar", que já nasce no passado (vai para "Ficou pendente").
+    if (secao === "pendentes") return sucesso("Compromisso salvo em Ficou pendente.");
+    return sucesso("Compromisso salvo.");
+  }
+
+  // Marcou "Ainda sem data" num item que tinha data (US16).
+  if (secao === "sem-data" && antes.data !== null) return sucesso("Anotado em Sem data.");
+
+  if (modo === "agendar") {
+    return secao === "sem-data" ? sucesso("Anotado em Sem data.") : sucesso("Compromisso agendado.");
+  }
+
+  if (modo === "remarcar") {
+    if (secao === "proximos") return sucesso("Compromisso remarcado.");
+    // A nova data ainda está no passado: barrinha âmbar (design, seção 13.9).
+    if (secao === "pendentes") return { texto: "Compromisso continua pendente.", tipo: "alerta" };
+    // [Interpretação do dev] Ex.: tirou o "Me cobrar" e a data continua no
+    // passado (ele vai para "Anteriores"). Os requisitos não trazem esse texto.
+    return sucesso("Compromisso atualizado.");
+  }
+
+  return sucesso("Compromisso atualizado.");
 }
 
 function salvarFormulario() {
@@ -577,37 +1039,48 @@ function salvarFormulario() {
   erroSalvar.hidden = true;
   if (!validarFormulario()) return;   // nada é salvo e nada é apagado do formulário
 
-  const agoraIso = new Date().toISOString();
-  // O campo de hora entrega "HH:MM" (às vezes com segundos: cortamos em 5 letras).
-  const hora = campoHora.value ? campoHora.value.slice(0, 5) : null;
-  const dados = {
-    titulo: campoTitulo.value.trim(),
-    data: campoData.value,
-    hora: horaValida(hora) ? hora : null,          // sem hora = dia todo
-    local: textoOuNulo(campoLocal.value, 100),     // vazio vira null
-    observacao: textoOuNulo(campoObs.value, 500)
-  };
+  const agora = new Date();
+  const agoraIso = agora.toISOString();
+  const dados = lerCamposDoFormulario();
+  const modo = modoDoFormulario;
 
   // Guardamos uma cópia da lista: se o localStorage recusar, voltamos atrás.
   const listaAntes = compromissos.slice();
   let id;
-  let mensagem;
+  let antes = null;
+  let depois;
 
   if (idEmEdicao) {
-    // Editar: troca o compromisso pelo atualizado (mesmo id, mesmo criadoEm).
+    // Editar, remarcar ou agendar: troca o compromisso pelo atualizado
+    // (mesmo id, mesmo criadoEm). Editar NÃO muda o status (US04): um
+    // item "Feito" continua "Feito". A exceção é virar "Sem data": item
+    // sem data é sempre "aberto" (seção 3 dos requisitos).
     id = idEmEdicao;
-    compromissos = compromissos.map(function (c) {
-      if (c.id !== id) return c;
-      return Object.assign({}, c, dados, { atualizadoEm: agoraIso });
-    });
-    mensagem = "Compromisso atualizado.";
+    antes = compromissos.find(function (c) { return c.id === id; });
+    const extra = { atualizadoEm: agoraIso };
+    if (dados.data === null) {
+      extra.status = "aberto";
+      extra.concluidoEm = null;
+    }
+    depois = Object.assign({}, antes, dados, extra);
+    compromissos = compromissos.map(function (c) { return c.id === id ? depois : c; });
   } else {
     id = criarId();
-    const novo = Object.assign({ id: id }, dados, { criadoEm: agoraIso, atualizadoEm: agoraIso });
-    compromissos.push(novo);
-    // Data ou hora no passado é permitido: ele vai direto para "Anteriores".
-    mensagem = compromissoPassou(novo, new Date()) ? "Compromisso salvo em Anteriores." : "Compromisso salvo.";
+    depois = Object.assign({ id: id }, dados, {
+      status: "aberto",
+      concluidoEm: null,
+      duracaoMin: null,   // reservados para a Etapa 3
+      itens: [],
+      criadoEm: agoraIso,
+      atualizadoEm: agoraIso
+    });
+    compromissos.push(depois);
   }
+
+  // Para o foco do Remarcar e do Agendar: de qual lista o item sai e
+  // quem vem depois dele nela (antes de a lista ser redesenhada).
+  const listaDeOnde = idEmEdicao ? listaQueContem(id) : null;
+  const idSeguinte = idEmEdicao ? idDoProximoNaLista(id) : null;
 
   if (!salvarCompromissos(compromissos)) {
     // localStorage cheio: desfaz na memória e avisa DENTRO da janela, que
@@ -624,13 +1097,19 @@ function salvarFormulario() {
     return;
   }
 
+  const aviso = avisoDoFormulario(modo, antes, depois, agora);
   desenharLista();
-  if (idEmEdicao) {
+  if (modo === "editar") {
     // Editou: o foco volta para o "Editar" desse compromisso (redesenhado).
     focoDepoisDeFechar = function () { focarCompromisso(id, "editar"); };
+  } else if (modo === "remarcar" || modo === "agendar") {
+    // A regra da US13: se o item saiu da lista, o foco vai para o próximo
+    // dela (ou "Novo compromisso"); se ficou (continua pendente ou sem
+    // data), volta para o mesmo botão no card redesenhado.
+    focoDepoisDeFechar = function () { focarDepoisDeMudar(id, listaDeOnde, idSeguinte, modo); };
   }
   janelaCompromisso.close();
-  mostrarStatus(mensagem);
+  mostrarStatus(aviso.texto, aviso.tipo);
 }
 
 
@@ -649,18 +1128,9 @@ function abrirConfirmacao(compromisso, botao) {
   janelaExcluir.querySelector('[data-acao="cancelar"]').focus();
 }
 
-/* Depois de excluir, o foco vai para o próximo compromisso da mesma lista.
-   Aqui descobrimos qual é ele, ANTES de apagar. */
-function idDoProximoNaLista(id) {
-  const lista = listaProximos.querySelector('.compromisso[data-id="' + CSS.escape(id) + '"]') ? listaProximos : listaAnteriores;
-  const itens = Array.from(lista.querySelectorAll(".compromisso"));
-  const posicao = itens.findIndex(function (item) { return item.dataset.id === id; });
-  const proximo = itens[posicao + 1];
-  return proximo ? proximo.dataset.id : null;
-}
-
 function confirmarExclusao() {
   const id = idParaExcluir;
+  // Vale dentro de cada seção: o próximo da MESMA lista (US05, 2b).
   const idSeguinte = idDoProximoNaLista(id);
   const listaAntes = compromissos;
 
@@ -682,6 +1152,53 @@ function confirmarExclusao() {
   };
   janelaExcluir.close();
   mostrarStatus("Compromisso excluído.");
+}
+
+
+/* ---------------------------------------------------------
+   9b. FEITO, NÃO VOU FAZER E DESFAZER (US13 e US15)
+   Sem confirmação: tudo pode ser desfeito.
+   --------------------------------------------------------- */
+
+/* Muda a situação de um compromisso e salva na hora.
+   mudancas = os campos que mudam (status e concluidoEm). */
+function mudarSituacao(compromisso, mudancas, mensagem) {
+  const id = compromisso.id;
+  const listaDeOnde = listaQueContem(id);
+  const idSeguinte = idDoProximoNaLista(id);
+  const listaAntes = compromissos;
+
+  // atualizadoEm também muda: assim o "Juntar" da importação (US09)
+  // sabe qual é a versão mais nova do compromisso.
+  const agoraIso = new Date().toISOString();
+  compromissos = compromissos.map(function (c) {
+    return c.id === id ? Object.assign({}, c, mudancas, { atualizadoEm: agoraIso }) : c;
+  });
+
+  if (!salvarCompromissos(compromissos)) {
+    // localStorage cheio: nada muda (nem na tela) e a faixa avisa.
+    compromissos = listaAntes;
+    mostrarFaixa("erro", "Não foi possível salvar o compromisso.");
+    return;
+  }
+
+  desenharLista();
+  // Se o item continuou na mesma lista, o foco vai para a ação nova
+  // do card ("Desfazer" depois de "Feito", e "Feito" depois de "Desfazer").
+  focarDepoisDeMudar(id, listaDeOnde, idSeguinte, mudancas.status === "aberto" ? "feito" : "desfazer");
+  mostrarStatus(mensagem);
+}
+
+function marcarFeito(compromisso) {
+  mudarSituacao(compromisso, { status: "feito", concluidoEm: new Date().toISOString() }, "Marcado como feito.");
+}
+
+function marcarNaoVouFazer(compromisso) {
+  mudarSituacao(compromisso, { status: "nao-vou-fazer", concluidoEm: new Date().toISOString() }, "Marcado como 'Não vou fazer'.");
+}
+
+function desfazer(compromisso) {
+  mudarSituacao(compromisso, { status: "aberto", concluidoEm: null }, "Desfeito.");
 }
 
 
@@ -984,7 +1501,7 @@ function adiarPeloLembrete() {
    --------------------------------------------------------- */
 
 botaoNovo.addEventListener("click", function () {
-  abrirFormulario(null, botaoNovo);
+  abrirFormulario(null, botaoNovo, "novo");
 });
 
 /* Um só "ouvinte" para todos os botões da lista ("delegação de eventos"):
@@ -995,7 +1512,7 @@ areaPrincipal.addEventListener("click", function (evento) {
   if (!botao) return;
 
   if (botao.dataset.acao === "novo") {
-    abrirFormulario(null, botao);
+    abrirFormulario(null, botao, "novo");
     return;
   }
 
@@ -1018,17 +1535,29 @@ areaPrincipal.addEventListener("click", function (evento) {
   // enquanto a janela está aberta, achamos o botão "novo" do mesmo item.
   botao.dataset.idDoItem = compromisso.id;
 
-  if (botao.dataset.acao === "editar") abrirFormulario(compromisso, botao);
-  if (botao.dataset.acao === "excluir") abrirConfirmacao(compromisso, botao);
+  const acao = botao.dataset.acao;
+  // Janelas (o mesmo formulário em modos diferentes, e a confirmação)
+  if (acao === "editar") abrirFormulario(compromisso, botao, "editar");
+  if (acao === "remarcar") abrirFormulario(compromisso, botao, "remarcar");
+  if (acao === "agendar") abrirFormulario(compromisso, botao, "agendar");
+  if (acao === "excluir") abrirConfirmacao(compromisso, botao);
+  // Etapa 2b: mudam na hora, sem janela (US13 e US15)
+  if (acao === "feito") marcarFeito(compromisso);
+  if (acao === "nao-vou-fazer") marcarNaoVouFazer(compromisso);
+  if (acao === "desfazer") desfazer(compromisso);
 });
 
-/* Botão "Anteriores": abre e fecha. Por ser um <button>, ele já funciona
-   com clique, toque, Enter e Espaço. */
-botaoAnteriores.addEventListener("click", function () {
-  const estavaAberto = botaoAnteriores.getAttribute("aria-expanded") === "true";
-  botaoAnteriores.setAttribute("aria-expanded", String(!estavaAberto));
-  listaAnteriores.hidden = estavaAberto;
-});
+/* Botões "Anteriores" e "Sem data": abrem e fecham a sua lista. Por serem
+   <button>, eles já funcionam com clique, toque, Enter e Espaço. */
+function ligarBotaoDeAbrir(botao, lista) {
+  botao.addEventListener("click", function () {
+    const estavaAberto = botao.getAttribute("aria-expanded") === "true";
+    botao.setAttribute("aria-expanded", String(!estavaAberto));
+    lista.hidden = estavaAberto;
+  });
+}
+ligarBotaoDeAbrir(botaoAnteriores, listaAnteriores);
+ligarBotaoDeAbrir(botaoSemData, listaSemData);
 
 // Salvar: botão "Salvar" ou Enter num campo de uma linha (o form faz o "submit").
 formulario.addEventListener("submit", function (evento) {
@@ -1049,6 +1578,24 @@ campoTitulo.addEventListener("input", function () {
     }
   });
 });
+campoMinutos.addEventListener("input", function () {
+  if (campoMinutos.hasAttribute("aria-invalid") && minutosDigitados() !== null) {
+    esconderErro(campoMinutos, erroMinutos);
+  }
+});
+
+// Etapa 2b: campos que ligam e desligam outros (US12, US14 e US16).
+campoSemData.addEventListener("change", function () {
+  // Desmarcou "Ainda sem data": a Data volta com o dia de hoje (US16).
+  if (!campoSemData.checked) campoData.value = hojeEmTexto(new Date());
+  atualizarCamposDependentes();
+});
+["input", "change"].forEach(function (tipoDeEvento) {
+  campoHora.addEventListener(tipoDeEvento, atualizarCamposDependentes);
+});
+opcoesDeSaida.forEach(function (opcao) {
+  opcao.addEventListener("change", atualizarCamposDependentes);
+});
 
 // Botões "Cancelar" das duas janelas e "Excluir" da confirmação.
 janelaCompromisso.querySelector('[data-acao="cancelar"]').addEventListener("click", function () {
@@ -1063,6 +1610,7 @@ janelaExcluir.querySelector('[data-acao="confirmar-exclusao"]').addEventListener
 // é o lugar certo para devolver o foco.
 janelaCompromisso.addEventListener("close", function () {
   idEmEdicao = null;
+  modoDoFormulario = "novo";
   erroSalvar.hidden = true;   // fechou: o aviso de "não foi possível salvar" some
   devolverFoco();
 });
@@ -1147,6 +1695,14 @@ function iniciar() {
 
   if (resultado.problema === "corrompido") {
     mostrarFaixa("alerta", "Não deu para ler os compromissos salvos. Uma cópia foi guardada e a agenda começou vazia.");
+  }
+  // Etapa 2b (US11): nos dois casos abaixo a agenda funciona na tela,
+  // mas não grava nada (gravacaoBloqueada, em armazenamento.js).
+  if (resultado.problema === "migracao-falhou") {
+    mostrarFaixa("erro", "Não foi possível atualizar seus dados neste navegador. As mudanças não serão salvas.");
+  }
+  if (resultado.problema === "versao-nova") {
+    mostrarFaixa("alerta", "Seus dados são de uma versão mais nova da Agenda. As mudanças não serão salvas.");
   }
   // armazenamentoDisponivel vem de armazenamento.js. Ele também fica false
   // se o dado estava corrompido e nem a cópia de segurança pôde ser gravada.

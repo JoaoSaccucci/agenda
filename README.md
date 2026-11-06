@@ -1,6 +1,6 @@
 # Agenda
 
-Um site simples para anotar compromissos. Você vê os próximos compromissos agrupados por dia ("Hoje", "Amanhã", "Sex, 14/11 · daqui a 3 dias") e pode criar, editar e excluir cada um. O que já passou vai para a seção "Anteriores", sem sumir.
+Um site simples para anotar compromissos. Você vê os próximos compromissos agrupados por dia ("Hoje", "Amanhã", "Sex, 14/11 · daqui a 3 dias") e pode criar, editar e excluir cada um. O que já passou vai para a seção "Anteriores", sem sumir. E nada cai no esquecimento: o que você pediu para ser cobrado fica em "Ficou pendente" até você resolver.
 
 ### Veja o site: **https://joaosaccucci.github.io/agenda/**
 
@@ -8,15 +8,21 @@ Um site simples para anotar compromissos. Você vê os próximos compromissos ag
 
 - **Lista por dia:** os próximos compromissos agrupados por dia, com hora ou "Dia todo".
 - **Criar, editar e excluir** compromissos (a exclusão pede confirmação).
-- **Anteriores:** o que já passou sai da frente, mas continua guardado.
+- **Anteriores:** o que já passou sai da frente, mas continua guardado, com a situação de cada um ("Feito", "Não vou fazer" ou "Passou").
+- **Feito e Desfazer:** marque um compromisso como feito (até antes da hora) e desfaça se errar.
+- **"Sair às...":** diga quanto tempo precisa para sair (15, 30, 45, 60 minutos ou outro valor) e a lista mostra a hora de sair. Faltando 15 minutos, vira "Sair em 12 min".
+- **"Me cobrar se eu não fizer" e "Ficou pendente":** se a data passar sem você marcar "Feito", o compromisso fica numa seção no topo da página até você escolher **Feito**, **Remarcar** ou **Não vou fazer**.
+- **Sem data:** anote algo que ainda não tem dia marcado ("Ainda sem data") e use **Agendar** quando souber.
 - **Cópia dos dados:** o botão "Seus dados" baixa um arquivo `agenda-AAAA-MM-DD.json` com todos os compromissos.
 - **Importar uma cópia:** abre um arquivo baixado pela Agenda e deixa escolher entre **Juntar** (acrescenta, sem apagar nada) e **Substituir tudo** (com confirmação). Serve para recuperar os dados ou levar a agenda para outro aparelho.
 - **Lembrete de cópia:** se a última cópia tem mais de 30 dias e algo mudou desde então, uma faixa lembra de baixar uma cópia nova ("Depois" adia por 7 dias).
+- **Atualização automática dos dados:** quem já usava a Agenda antes dessas funções não precisa fazer nada. Na primeira visita, os dados antigos são guardados como estavam e convertidos para o formato novo. Cópias baixadas antes também podem ser importadas.
 
 ## Tecnologias
 
 - HTML, CSS e JavaScript puros: sem framework, sem bibliotecas, sem back-end e sem etapa de build.
 - `localStorage` do navegador para guardar os compromissos.
+- `<fieldset>` com botões de opção e caixas de marcar para "Tempo para sair", "Me cobrar" e "Ainda sem data".
 - `<dialog>` do HTML para o formulário, as confirmações e as janelas de cópia e importação.
 - `Blob` e um link com `download` para gerar o arquivo de cópia no próprio navegador, e `<input type="file">` para escolher o arquivo a importar.
 - Fontes Space Grotesk, JetBrains Mono e Exo 2 (Google Fonts). Se não carregarem, o site usa as fontes do sistema.
@@ -49,10 +55,10 @@ agenda/
 ├── .gitattributes      # fim de linha padrão (LF)
 ├── css/style.css       # visual "quadro de partidas ao anoitecer"
 └── js/
-    ├── datas.js          # regras de data e hora (Hoje, Amanhã, "passou"...)
-    ├── armazenamento.js  # ler e gravar no localStorage (o único que mexe nele)
+    ├── datas.js          # regras de data e hora (Hoje, Amanhã, "passou", seção de cada item, "Sair às")
+    ├── armazenamento.js  # ler e gravar no localStorage (o único que mexe nele) e atualizar os dados antigos
     ├── copia.js          # regras da cópia: montar o arquivo, conferir a importação, juntar, lembrete
-    └── app.js            # a tela: lista por dia, formulário, excluir, "Seus dados", avisos
+    └── app.js            # a tela: seções, formulário, Feito, pendências, excluir, "Seus dados", avisos
 ```
 
 ## Feito com a equipe da João Saccucci Labs

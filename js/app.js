@@ -9,6 +9,8 @@
    e faixa de lembrete de cópia (seções 10 a 12).
    Etapa 2b: "Ficou pendente", "Sem data", "Sair às...", Feito,
    Desfazer, "Não vou fazer", Remarcar e Agendar (seções 5, 8 e 9b).
+   Etapa 3a: hora de fim, aviso de conflito e de aperto, e o
+   checklist "O que levar" no card e no formulário (seções 5, 8b e 9c).
 
    Regra de segurança (US01): tudo o que a pessoa digita entra
    na página com textContent, NUNCA com innerHTML. Assim um
@@ -56,6 +58,19 @@ let ultimoBackup = null;
 // Etapa 2a: o arquivo já conferido que espera a escolha "Juntar" ou
 // "Substituir tudo": { compromissos: [...], ignorados: N }.
 let copiaParaImportar = null;
+
+// Etapa 3a (US17): os itens do checklist enquanto o formulário está aberto.
+// Só vão para o compromisso ao Salvar; Cancelar ou Esc descartam.
+let itensDoFormulario = [];
+
+// Etapa 3a (US18): ids dos compromissos com a lista "O que levar" aberta
+// no card. Um Set é uma lista sem repetidos. A lista começa fechada ao
+// abrir a página e continua aberta quando a tela é redesenhada.
+const checklistsAbertos = new Set();
+
+// Etapa 3a (US20): avisos de conflito e de aperto da lista que está
+// sendo desenhada, por id do compromisso ("Map" = tabela id -> aviso).
+let avisosDeHorario = new Map();
 
 
 /* ---------------------------------------------------------
@@ -105,6 +120,23 @@ const campoMinutos = document.getElementById("campo-minutos");
 const erroMinutos = document.getElementById("erro-minutos");
 const campoCobrar = document.getElementById("campo-cobrar");
 
+// Etapa 3a: "Hora de fim" (US19) e "O que levar" (US17)
+const grupoFim = document.getElementById("grupo-fim");
+const dicaFim = document.getElementById("dica-fim");
+const dicaFimSemHora = document.getElementById("dica-fim-sem-hora");
+const campoFim = document.getElementById("campo-fim");
+const erroFim = document.getElementById("erro-fim");
+const campoDuracao = document.getElementById("campo-duracao");
+const erroDuracao = document.getElementById("erro-duracao");
+const blocoDuracaoMin = document.getElementById("bloco-duracao-min");
+const campoDuracaoMin = document.getElementById("campo-duracao-min");
+const erroDuracaoMin = document.getElementById("erro-duracao-min");
+const listaItensForm = document.getElementById("itens-lista");
+const campoNovoItem = document.getElementById("campo-novo-item");
+const botaoAdicionar = document.getElementById("botao-adicionar");
+const dicaItensLimite = document.getElementById("dica-itens-limite");
+const avisoItens = document.getElementById("itens-aviso");
+
 const janelaExcluir = document.getElementById("janela-excluir");
 const tituloExcluir = document.getElementById("excluir-titulo");
 
@@ -153,7 +185,13 @@ const ICONES = {
   agendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M12 13v5M9.5 15.5h5"/>',
   sair: '<path d="M13 4H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h7"/><path d="M15 8l4 4-4 4M19 12H10"/>',
   cobrar: '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
-  passou: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+  passou: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  // Etapa 3a (design, seção 14.8). "seta" é a mesma de "Anteriores".
+  mala: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 12.5h18"/>',
+  conflito: '<rect x="3" y="4" width="12" height="10" rx="2"/><rect x="9" y="10" width="12" height="10" rx="2"/>',
+  aperto: '<path d="M6 3h12M6 21h12"/><path d="M7 3v2a5 5 0 0 0 10 0V3M7 21v-2a5 5 0 0 1 10 0v2"/>',
+  remover: '<path d="M6 6l12 12M18 6L6 18"/>',
+  seta: '<path d="M6 9l6 6 6-6"/>'
 };
 
 // Ilustração da lista vazia (design, seção 8.3). Também é texto fixo.
@@ -183,9 +221,10 @@ function criarDeHtmlFixo(html) {
   return molde.content.firstElementChild;
 }
 
-function criarIcone(nome) {
+/* classeExtra (opcional): mais uma classe no <svg> (ex.: "checklist-seta"). */
+function criarIcone(nome, classeExtra) {
   return criarDeHtmlFixo(
-    '<svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" ' +
+    '<svg class="icone' + (classeExtra ? " " + classeExtra : "") + '" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" ' +
     'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
     ICONES[nome] + "</svg>"
   );
@@ -307,7 +346,22 @@ function criarPlaca(compromisso) {
     const placa = criarElemento("div", "compromisso-hora");
     const tempo = criarElemento("time", null, compromisso.hora);
     tempo.dateTime = compromisso.data + "T" + compromisso.hora;
-    placa.appendChild(tempo);
+    const fim = horaDeFim(compromisso);
+    if (fim === null) {
+      placa.appendChild(tempo);
+      return placa;
+    }
+    // Etapa 3a (US19, design 14.4.1): início em cima e fim embaixo.
+    // Quem enxerga vê "09:30" e "–10:30"; o leitor de tela ouve
+    // "Das 09:30 às 10:30" (o "–" é só enfeite).
+    placa.classList.add("compromisso-hora--intervalo");
+    const tempoFim = criarElemento("time", null, fim);
+    tempoFim.dateTime = compromisso.data + "T" + fim;
+    const traco = criarElemento("span", null, "–");
+    traco.setAttribute("aria-hidden", "true");
+    const metadeDeBaixo = criarElemento("span", "compromisso-hora-fim");
+    metadeDeBaixo.append(traco, criarElemento("span", "sr-only", " às "), tempoFim);
+    placa.append(criarElemento("span", "sr-only", "Das "), tempo, metadeDeBaixo);
     return placa;
   }
   // O texto fica num <span> para o CSS conseguir quebrar em "DIA / TODO".
@@ -394,6 +448,134 @@ function criarValorEra(compromisso, agora) {
 }
 
 
+/* ---------------------------------------------------------
+   5b. ETAPA 3a NO CARD: CONFLITO, APERTO E "O QUE LEVAR"
+   --------------------------------------------------------- */
+
+/* Calcula os avisos de conflito e de aperto (US20) para os compromissos
+   da lista "Próximos". Devolve um Map: id do compromisso -> aviso.
+   Quem pode atrapalhar (o "A" da seção 3) é qualquer compromisso com
+   data, hora e "aberto", em qualquer seção (até um que já passou mas
+   ainda não acabou). Dia todo, sem data, "Feito" e "Não vou fazer"
+   ficam de fora. */
+function calcularAvisosDeHorario(proximos) {
+  const comHora = compromissos.filter(function (c) {
+    return c.data !== null && c.hora !== null && c.status === "aberto";
+  });
+  // A ordem da US01 (data, hora, título). O sort é "estável": num empate
+  // completo (mesmo título no mesmo minuto) fica a ordem da lista, a
+  // mesma que a tela usa. Assim "quem vem antes" é igual ao que se vê.
+  const ordenados = comHora.slice().sort(compararPorDataEHora);
+
+  const avisos = new Map();
+  proximos.forEach(function (b) {
+    if (b.hora === null) return;   // dia todo: fora da comparação
+    const posicao = ordenados.indexOf(b);
+    const antesNoMesmoDia = ordenados.slice(0, posicao).filter(function (a) { return a.data === b.data; });
+    const aviso = avisoDeHorario(b, antesNoMesmoDia);
+    if (aviso) avisos.set(b.id, aviso);
+  });
+  return avisos;
+}
+
+/* A tarja "Conflito:" ou "Aperto:" (design, seção 14.4.2). Sem aria-live:
+   é lida junto com o card. O título do outro compromisso entra como
+   texto (append de texto = textContent), nunca como HTML. */
+function criarAvisoDeHorario(aviso) {
+  const ehConflito = aviso.tipo === "conflito";
+  const tarja = criarElemento("p", "compromisso-aviso compromisso-aviso--" + aviso.tipo);
+  tarja.appendChild(criarIcone(aviso.tipo));
+
+  const texto = criarElemento("span");
+  texto.appendChild(criarElemento("strong", "compromisso-aviso-tipo", ehConflito ? "Conflito:" : "Aperto:"));
+  if (ehConflito && aviso.fim === null) {
+    texto.append(" mesmo horário de " + aviso.outro.titulo + ".");
+  } else if (ehConflito) {
+    texto.append(" " + aviso.outro.titulo + " vai até " + aviso.fim + ".");
+  } else {
+    texto.append(" sair às " + aviso.sair + ", mas " + aviso.outro.titulo + " vai até " + aviso.fim + ".");
+  }
+  tarja.appendChild(texto);
+  return tarja;
+}
+
+
+/* Texto do botão do checklist: "O que levar (2 de 5)" ou, com todos
+   marcados, "O que levar: tudo pronto (5 de 5)". */
+function textosDoChecklist(itens) {
+  const marcados = itens.filter(function (item) { return item.feito; }).length;
+  const pronto = marcados === itens.length;
+  return {
+    pronto: pronto,
+    rotulo: pronto ? "O que levar: tudo pronto" : "O que levar",
+    contagem: "(" + marcados + " de " + itens.length + ")"
+  };
+}
+
+/* Escreve (ou reescreve) o conteúdo do botão "O que levar". Usada ao
+   desenhar o card e depois de marcar um item: aí só o botão muda e a
+   caixa marcada continua com o foco (design, seção 14.4.3). */
+function preencherBotaoDoChecklist(botao, compromisso) {
+  const textos = textosDoChecklist(compromisso.itens);
+  botao.closest(".checklist").classList.toggle("checklist--pronto", textos.pronto);
+
+  const rotulo = criarElemento("span", "checklist-rotulo", textos.rotulo + " ");
+  rotulo.appendChild(criarElemento("span", "checklist-contagem", textos.contagem));
+  botao.replaceChildren(
+    criarIcone(textos.pronto ? "feito" : "mala", "checklist-icone"),
+    rotulo,
+    criarIcone("seta", "checklist-seta")
+  );
+  // Nome acessível: "O que levar (2 de 5), Dentista". Usamos aria-label,
+  // e não um <span class="sr-only">, pelo mesmo motivo do botão "Feito":
+  // o pedaço escondido ganharia um espaço antes da vírgula.
+  botao.setAttribute("aria-label", textos.rotulo + " " + textos.contagem + ", " + compromisso.titulo);
+}
+
+/* "O que levar" no card (US18): o botão que abre e fecha e a lista de
+   caixas de marcar. Sem itens, não cria nada (devolve null). */
+function criarChecklist(compromisso) {
+  if (compromisso.itens.length === 0) {
+    // Ficou sem itens: esquece que estava aberto. Se ganhar itens de
+    // novo, o botão volta fechado, como na primeira vez.
+    checklistsAbertos.delete(compromisso.id);
+    return null;
+  }
+
+  const aberto = checklistsAbertos.has(compromisso.id);
+  const idDaLista = "checklist-" + compromisso.id;
+  const caixa = criarElemento("div", "checklist");
+
+  const botao = criarElemento("button", "checklist-botao");
+  botao.type = "button";
+  botao.dataset.acao = "checklist";
+  botao.setAttribute("aria-expanded", String(aberto));
+  botao.setAttribute("aria-controls", idDaLista);
+  caixa.appendChild(botao);
+  preencherBotaoDoChecklist(botao, compromisso);
+
+  const lista = criarElemento("ul", "checklist-lista");
+  lista.id = idDaLista;
+  lista.setAttribute("aria-label", "O que levar: " + compromisso.titulo);
+  lista.hidden = !aberto;
+  compromisso.itens.forEach(function (item, indice) {
+    const marcar = criarElemento("input", "marcar-caixa");
+    marcar.type = "checkbox";
+    marcar.checked = item.feito;
+    marcar.dataset.acao = "marcar-item";
+    marcar.dataset.indice = String(indice);
+    // O <label> em volta liga o texto à caixa: a linha inteira é clicável.
+    const rotulo = criarElemento("label", "marcar checklist-item");
+    rotulo.append(marcar, criarElemento("span", null, item.texto));
+    const li = criarElemento("li");
+    li.appendChild(rotulo);
+    lista.appendChild(li);
+  });
+  caixa.appendChild(lista);
+  return caixa;
+}
+
+
 /* Um compromisso (design, seções 6.3 e 13.4). secao = onde ele aparece. */
 function criarItem(compromisso, secao, agora) {
   const item = criarElemento("li", "compromisso" + CLASSE_DA_SECAO[secao]);
@@ -418,6 +600,11 @@ function criarItem(compromisso, secao, agora) {
     corpo.appendChild(era);
   }
 
+  // Etapa 3a (US20): conflito ou aperto, só na lista "Próximos".
+  if (secao === "proximos" && avisosDeHorario.has(compromisso.id)) {
+    corpo.appendChild(criarAvisoDeHorario(avisosDeHorario.get(compromisso.id)));
+  }
+
   if (compromisso.local) {
     const local = criarElemento("p", "compromisso-local");
     local.appendChild(criarIcone("local"));
@@ -433,6 +620,11 @@ function criarItem(compromisso, secao, agora) {
     corpo.appendChild(obs);
   }
   item.appendChild(corpo);
+
+  // Etapa 3a (US18): "O que levar", entre o texto e os botões, em todas
+  // as seções. Assim o Tab passa por ele antes de "Feito" e "Editar".
+  const checklist = criarChecklist(compromisso);
+  if (checklist) item.appendChild(checklist);
 
   const acoes = criarElemento("div", "compromisso-acoes");
   acoesDoItem(compromisso, secao).forEach(function (acao) {
@@ -561,6 +753,11 @@ function desenharLista() {
   // depois de redesenhar (senão ele "cairia" no topo da página).
   const focoAntes = lembrarFocoNaLista();
 
+  // Etapa 3a (US20): os avisos são calculados de novo a cada desenho
+  // (criar, editar, excluir, importar, Feito, Desfazer e a cada minuto
+  // em que algo muda de seção).
+  avisosDeHorario = calcularAvisosDeHorario(secoes.proximos);
+
   // "Ficou pendente" (US14): sempre aberta; sem pendências, some.
   listaPendentes.replaceChildren();
   secaoPendentes.hidden = secoes.pendentes.length === 0;
@@ -604,7 +801,7 @@ function desenharLista() {
 
   resumoDaTela = calcularResumo(agora);
 
-  if (focoAntes) focarCompromisso(focoAntes.id, focoAntes.acao);
+  if (focoAntes) focarCompromisso(focoAntes.id, focoAntes.acao, focoAntes.indice);
 }
 
 
@@ -648,13 +845,14 @@ function estaVisivel(elemento) {
   return elemento !== null && elemento.isConnected && elemento.getClientRects().length > 0;
 }
 
-/* Se o foco está num compromisso, devolve { id, acao }. */
+/* Se o foco está num compromisso, devolve { id, acao, indice }.
+   indice: só nas caixas do checklist (qual item estava com o foco). */
 function lembrarFocoNaLista() {
   const ativo = document.activeElement;
   if (!ativo || !areaPrincipal.contains(ativo)) return null;
   const item = ativo.closest(".compromisso");
   if (!item) return null;
-  return { id: item.dataset.id, acao: ativo.dataset.acao || "item" };
+  return { id: item.dataset.id, acao: ativo.dataset.acao || "item", indice: ativo.dataset.indice };
 }
 
 /* Acha o card de um compromisso na página (ou null). */
@@ -668,13 +866,16 @@ function acharItem(id, dentroDe) {
    Se ele estiver dentro de "Sem data" ou "Anteriores" fechados, o foco vai
    para o botão que abre a seção; se ele não existir mais, vai para o
    botão "Novo compromisso". */
-function focarCompromisso(id, acao) {
+function focarCompromisso(id, acao, indice) {
   const item = acharItem(id);
   if (!item) {
     botaoNovo.focus();
     return;
   }
-  const alvo = (acao !== "item" && item.querySelector('[data-acao="' + acao + '"]')) || item;
+  // Etapa 3a: uma caixa do checklist é achada pela ação + o número do item.
+  let seletor = '[data-acao="' + acao + '"]';
+  if (indice !== undefined) seletor += '[data-indice="' + indice + '"]';
+  const alvo = (acao !== "item" && item.querySelector(seletor)) || item;
   if (estaVisivel(alvo)) {
     alvo.focus();
     return;
@@ -882,6 +1083,21 @@ function atualizarCamposDependentes() {
   if (!temHora || !outro) esconderErro(campoMinutos, erroMinutos);   // o campo não vale agora
 
   campoCobrar.disabled = semData;
+
+  // Etapa 3a (US19): sem hora, "Hora de fim" fica desativada e VAZIA
+  // ("Sem hora de fim"); a dica muda para "Escolha uma hora...".
+  // Quando a Hora volta, os campos continuam vazios.
+  grupoFim.disabled = !temHora;
+  dicaFim.hidden = !temHora;
+  dicaFimSemHora.hidden = temHora;
+  grupoFim.setAttribute("aria-describedby", temHora ? "dica-fim" : "dica-fim-sem-hora");
+  if (!temHora) {
+    campoFim.value = "";
+    campoDuracao.value = "";
+    campoDuracaoMin.value = "";
+    esconderErrosDoFim();
+  }
+  blocoDuracaoMin.hidden = campoDuracao.value !== "outro";
 }
 
 
@@ -897,6 +1113,8 @@ function abrirFormulario(compromisso, botao, modo) {
   esconderErro(campoTitulo, erroTitulo);
   esconderErro(campoData, erroData);
   esconderErro(campoMinutos, erroMinutos);
+  esconderErrosDoFim();
+  avisoItens.textContent = "";   // a região de avisos do checklist começa vazia
 
   tituloDaJanela.textContent = TITULOS_DO_FORMULARIO[modo];
   subtituloDaJanela.hidden = modo !== "remarcar";
@@ -911,6 +1129,12 @@ function abrirFormulario(compromisso, botao, modo) {
     campoCobrar.checked = compromisso.cobrar;
     campoLocal.value = compromisso.local || "";
     campoObs.value = compromisso.observacao || "";
+    // Etapa 3a: "Termina às" calculado e a Duração na opção certa (US19),
+    // e uma CÓPIA dos itens (mexer nela não muda o compromisso até Salvar).
+    mostrarDuracaoNoFormulario(compromisso.hora, compromisso.duracaoMin);
+    itensDoFormulario = compromisso.itens.map(function (item) {
+      return { texto: item.texto, feito: item.feito };
+    });
 
     if (modo === "agendar") {
       // US16: "Ainda sem data" desmarcada e a Data com o dia de hoje.
@@ -924,9 +1148,11 @@ function abrirFormulario(compromisso, botao, modo) {
   } else {
     idEmEdicao = null;
     campoData.value = hojeEmTexto(new Date());   // a data já vem com hoje
+    itensDoFormulario = [];
   }
 
   atualizarCamposDependentes();
+  desenharItensDoFormulario();
 
   // showModal(): abre por cima da página; Esc fecha e o Tab fica preso dentro.
   janelaCompromisso.showModal();
@@ -953,12 +1179,21 @@ function validarFormulario() {
   if (dataOk) esconderErro(campoData, erroData); else mostrarErro(campoData, erroData);
   if (minutosOk) esconderErro(campoMinutos, erroMinutos); else mostrarErro(campoMinutos, erroMinutos);
 
-  // O foco vai para o primeiro campo com problema, na ordem do formulário.
+  // Etapa 3a (US19): a hora de fim tem no máximo UM problema por vez.
+  const fim = avaliarHoraDeFim();
+  esconderErrosDoFim();
+  const camposDoFim = { fim: [campoFim, erroFim], duracao: [campoDuracao, erroDuracao], minutos: [campoDuracaoMin, erroDuracaoMin] };
+  if (fim.erro) mostrarErro(camposDoFim[fim.erro][0], camposDoFim[fim.erro][1]);
+
+  // O foco vai para o primeiro campo com problema, na ordem do formulário:
+  // Título, Data, Hora de fim (Termina às, Duração ou Minutos), Minutos antes.
   let campoComErro = null;
   if (!tituloOk) {
     campoComErro = campoTitulo;
   } else if (!dataOk) {
     campoComErro = campoData;
+  } else if (fim.erro) {
+    campoComErro = camposDoFim[fim.erro][0];
   } else if (!minutosOk) {
     campoComErro = campoMinutos;
   }
@@ -970,7 +1205,7 @@ function validarFormulario() {
     // para dentro da tela. "nearest" = rola o mínimo necessário.
     campoComErro.closest(".campo").scrollIntoView({ block: "nearest" });
   }
-  return tituloOk && dataOk && minutosOk;
+  return tituloOk && dataOk && minutosOk && !fim.erro;
 }
 
 /* Os dados digitados, no formato da versão 2 (seção 3 dos requisitos). */
@@ -995,7 +1230,11 @@ function lerCamposDoFormulario() {
     local: textoOuNulo(campoLocal.value, 100),     // vazio vira null
     observacao: textoOuNulo(campoObs.value, 500),
     antecedenciaMin: antecedenciaMin,
-    cobrar: !semData && campoCobrar.checked        // sem data, nunca cobra
+    cobrar: !semData && campoCobrar.checked,       // sem data, nunca cobra
+    // Etapa 3a: só a duração é guardada (US19); sem hora, null.
+    duracaoMin: hora !== null ? avaliarHoraDeFim().duracaoMin : null,
+    // Uma cópia da lista do formulário (item novo já entrou com feito: false).
+    itens: itensDoFormulario.map(function (item) { return { texto: item.texto, feito: item.feito }; })
   };
 }
 
@@ -1039,6 +1278,15 @@ function salvarFormulario() {
   erroSalvar.hidden = true;
   if (!validarFormulario()) return;   // nada é salvo e nada é apagado do formulário
 
+  // US17: o que ficou digitado em "Novo item" entra na lista antes de
+  // salvar (nada do que foi digitado se perde). Sem aviso: a janela fecha.
+  const textoPendente = campoNovoItem.value.trim();
+  if (textoPendente !== "" && itensDoFormulario.length < MAXIMO_DE_ITENS) {
+    itensDoFormulario.push({ texto: textoPendente, feito: false });
+    campoNovoItem.value = "";
+    desenharItensDoFormulario();
+  }
+
   const agora = new Date();
   const agoraIso = agora.toISOString();
   const dados = lerCamposDoFormulario();
@@ -1069,8 +1317,6 @@ function salvarFormulario() {
     depois = Object.assign({ id: id }, dados, {
       status: "aberto",
       concluidoEm: null,
-      duracaoMin: null,   // reservados para a Etapa 3
-      itens: [],
       criadoEm: agoraIso,
       atualizadoEm: agoraIso
     });
@@ -1110,6 +1356,285 @@ function salvarFormulario() {
   }
   janelaCompromisso.close();
   mostrarStatus(aviso.texto, aviso.tipo);
+}
+
+
+/* ---------------------------------------------------------
+   8b. FORMULÁRIO: HORA DE FIM (US19)
+   "Termina às" e "Duração" são duas formas de ver o mesmo valor.
+   Quando um muda, o JavaScript preenche o outro na hora. Ao salvar,
+   só a duração (em minutos) é guardada.
+   --------------------------------------------------------- */
+
+// Opções fixas da Duração. Outro valor aparece em "Outro".
+const OPCOES_DE_DURACAO = ["30", "60", "120"];
+
+/* Os minutos digitados em "Outro" da Duração, se forem um inteiro de
+   1 a 1439. Senão, null. (Mesmo jeito do minutosDigitados da US12.) */
+function duracaoDigitada() {
+  const texto = campoDuracaoMin.value.trim();
+  if (!/^\d+$/.test(texto)) return null;
+  const minutos = Number(texto);
+  return duracaoValida(minutos) ? minutos : null;
+}
+
+/* A duração que a lista de escolha diz agora, em minutos, ou null
+   ("Sem hora de fim", ou "Outro" com os minutos vazios ou inválidos). */
+function duracaoEscolhida() {
+  if (campoDuracao.value === "") return null;
+  if (campoDuracao.value === "outro") return duracaoDigitada();
+  return Number(campoDuracao.value);
+}
+
+/* A Hora do formulário em minutos desde 00:00, ou null sem hora. */
+function inicioNoFormulario() {
+  const texto = campoHora.value.slice(0, 5);
+  return !campoSemData.checked && horaValida(texto) ? minutosDoDia(texto) : null;
+}
+
+/* "Termina às" em minutos, ou null se estiver vazio. */
+function fimNoFormulario() {
+  const texto = campoFim.value.slice(0, 5);
+  return horaValida(texto) ? minutosDoDia(texto) : null;
+}
+
+/* O "acender" em âmbar do campo que o JavaScript mudou sozinho (enfeite,
+   design 14.3.2). Tirar a classe, ler offsetWidth e pôr de novo faz a
+   animação recomeçar mesmo se ela ainda estiver rodando. */
+function acenderCampo(campo) {
+  campo.classList.remove("ajustado");
+  void campo.offsetWidth;   // obriga o navegador a "notar" que a classe saiu
+  campo.classList.add("ajustado");
+}
+[campoFim, campoDuracao, campoDuracaoMin].forEach(function (campo) {
+  campo.addEventListener("animationend", function () { campo.classList.remove("ajustado"); });
+});
+
+/* Põe uma duração na lista de escolha: null = "Sem hora de fim";
+   30, 60 ou 120 = a opção; outro número = "Outro" com os minutos. */
+function escolherDuracao(minutos) {
+  let valor = "";
+  if (minutos !== null) {
+    valor = OPCOES_DE_DURACAO.includes(String(minutos)) ? String(minutos) : "outro";
+  }
+  const minutosTexto = valor === "outro" ? String(minutos) : "";
+  if (campoDuracao.value !== valor) acenderCampo(campoDuracao);
+  if (valor === "outro" && campoDuracaoMin.value !== minutosTexto) acenderCampo(campoDuracaoMin);
+  campoDuracao.value = valor;
+  campoDuracaoMin.value = minutosTexto;
+  blocoDuracaoMin.hidden = valor !== "outro";
+}
+
+/* Escreve "Termina às" (minutos desde 00:00, ou null para vazio). */
+function escreverFim(minutos) {
+  const texto = minutos === null ? "" : horaDosMinutos(minutos);
+  if (campoFim.value.slice(0, 5) !== texto) {
+    campoFim.value = texto;
+    acenderCampo(campoFim);
+  }
+}
+
+/* Mudou "Termina às": a Duração vira a diferença. Fim vazio, igual ou
+   antes da Hora: "Sem hora de fim". */
+function aoMudarFim() {
+  const inicio = inicioNoFormulario();
+  if (inicio === null) return;
+  const fim = fimNoFormulario();
+  escolherDuracao(fim !== null && fim > inicio ? fim - inicio : null);
+  esconderErrosResolvidos();
+}
+
+/* Mudou a Duração (ou os minutos de "Outro"): "Termina às" = Hora +
+   duração. Sem duração, ou passando de 23:59, "Termina às" fica vazio. */
+function aoMudarDuracao() {
+  const outro = campoDuracao.value === "outro";
+  blocoDuracaoMin.hidden = !outro;
+  // Fora de "Outro", o número escondido não vale mais: o campo fica limpo.
+  if (!outro) campoDuracaoMin.value = "";
+  const inicio = inicioNoFormulario();
+  if (inicio === null) return;
+  const duracao = duracaoEscolhida();
+  const fim = duracao === null ? null : inicio + duracao;
+  escreverFim(fim !== null && fim <= ULTIMO_MINUTO_DO_DIA ? fim : null);
+  esconderErrosResolvidos();
+}
+
+/* Mudou a Hora (e continua com hora): a duração fica e "Termina às" é
+   recalculado. [Decisão do dev] Se a Duração está em "Sem hora de fim"
+   mas "Termina às" tem uma hora (ex.: era igual ou antes da Hora antiga),
+   a Duração é recalculada a partir dela, para os dois não ficarem
+   dizendo coisas diferentes. */
+function aoMudarHora() {
+  if (inicioNoFormulario() === null) return;   // sem hora: atualizarCamposDependentes limpa
+  if (duracaoEscolhida() !== null) {
+    aoMudarDuracao();
+  } else if (fimNoFormulario() !== null) {
+    aoMudarFim();
+  }
+}
+
+/* Mostra no formulário a duração de um compromisso salvo (ao editar). */
+function mostrarDuracaoNoFormulario(hora, duracaoMin) {
+  campoDuracao.value = "";
+  campoDuracaoMin.value = "";
+  campoFim.value = "";
+  if (hora === null || duracaoMin === null) return;
+  const valor = OPCOES_DE_DURACAO.includes(String(duracaoMin)) ? String(duracaoMin) : "outro";
+  campoDuracao.value = valor;
+  if (valor === "outro") campoDuracaoMin.value = String(duracaoMin);
+  campoFim.value = horaDosMinutos(minutosDoDia(hora) + duracaoMin);
+}
+
+/* Decide a duração que vai ser salva (US19, "Ao salvar"). Devolve
+   { duracaoMin, erro }. erro = null, "fim", "duracao" ou "minutos":
+   o campo com problema. "Termina às" preenchido vale mais que a Duração. */
+function avaliarHoraDeFim() {
+  const inicio = inicioNoFormulario();
+  if (inicio === null) return { duracaoMin: null, erro: null };
+
+  const fim = fimNoFormulario();
+  if (fim !== null) {
+    if (fim <= inicio) return { duracaoMin: null, erro: "fim" };
+    return { duracaoMin: fim - inicio, erro: null };
+  }
+
+  if (campoDuracao.value === "") return { duracaoMin: null, erro: null };
+  const duracao = duracaoEscolhida();
+  if (duracao === null) return { duracaoMin: null, erro: "minutos" };   // "Outro" vazio ou inválido
+  if (inicio + duracao > ULTIMO_MINUTO_DO_DIA) return { duracaoMin: null, erro: "duracao" };
+  return { duracaoMin: duracao, erro: null };
+}
+
+function esconderErrosDoFim() {
+  esconderErro(campoFim, erroFim);
+  esconderErro(campoDuracao, erroDuracao);
+  esconderErro(campoDuracaoMin, erroDuracaoMin);
+}
+
+/* Ao corrigir a hora de fim, o erro que estava na tela some (como nos
+   outros campos): some todo erro que não é mais o problema de agora.
+   Só esconde: os erros só APARECEM ao tentar salvar. */
+function esconderErrosResolvidos() {
+  const erroAgora = avaliarHoraDeFim().erro;
+  if (erroAgora !== "fim") esconderErro(campoFim, erroFim);
+  if (erroAgora !== "duracao") esconderErro(campoDuracao, erroDuracao);
+  if (erroAgora !== "minutos") esconderErro(campoDuracaoMin, erroDuracaoMin);
+}
+
+
+/* ---------------------------------------------------------
+   8c. FORMULÁRIO: "O QUE LEVAR" (US17)
+   A lista fica em itensDoFormulario e só vai para o compromisso
+   ao Salvar.
+   --------------------------------------------------------- */
+
+/* Anuncia para o leitor de tela, sem tirar o foco do lugar.
+   Esvazia e escreve no quadro seguinte: assim a mesma frase duas
+   vezes seguidas também é lida (mesmo jeito do mostrarStatus). */
+function anunciarNoFormulario(texto) {
+  avisoItens.textContent = "";
+  requestAnimationFrame(function () { avisoItens.textContent = texto; });
+}
+
+/* Desenha a lista do formulário e liga ou desliga o limite de 20. */
+function desenharItensDoFormulario() {
+  listaItensForm.replaceChildren();
+  itensDoFormulario.forEach(function (item, indice) {
+    const li = criarElemento("li", "item-form" + (item.feito ? " item-form--marcado" : ""));
+    const texto = criarElemento("span", "item-form-texto", item.texto);
+    // Marcado no card: riscado aqui e "(já marcado)" para o leitor de tela.
+    if (item.feito) texto.appendChild(criarElemento("span", "sr-only", " (já marcado)"));
+    li.appendChild(texto);
+
+    const remover = criarElemento("button", "botao-item botao-item--perigo");
+    remover.type = "button";
+    remover.dataset.acao = "remover-item";
+    remover.dataset.indice = String(indice);
+    remover.append(criarIcone("remover"), "Remover", criarElemento("span", "sr-only", " " + item.texto));
+    li.appendChild(remover);
+    listaItensForm.appendChild(li);
+  });
+
+  // Com 20 itens: o campo fica "indisponível" (aria-disabled + readonly,
+  // continua focável: design 14.6) e o botão fica desativado de verdade.
+  const cheio = itensDoFormulario.length >= MAXIMO_DE_ITENS;
+  dicaItensLimite.hidden = !cheio;
+  botaoAdicionar.disabled = cheio;
+  campoNovoItem.readOnly = cheio;
+  if (cheio) {
+    campoNovoItem.setAttribute("aria-disabled", "true");
+    campoNovoItem.setAttribute("aria-describedby", "dica-itens-limite");
+  } else {
+    campoNovoItem.removeAttribute("aria-disabled");
+    campoNovoItem.removeAttribute("aria-describedby");
+  }
+}
+
+/* "Adicionar" (botão ou Enter no campo). Campo vazio ou só com espaços:
+   não faz nada. O foco fica (ou vai) no campo "Novo item". */
+function adicionarItem() {
+  const texto = campoNovoItem.value.trim();
+  campoNovoItem.focus();
+  if (texto === "" || itensDoFormulario.length >= MAXIMO_DE_ITENS) return;
+  itensDoFormulario.push({ texto: texto, feito: false });
+  campoNovoItem.value = "";
+  desenharItensDoFormulario();
+  anunciarNoFormulario(texto + " adicionado.");
+}
+
+/* "Remover": o foco vai para o "Remover" do próximo item (que passa a
+   ter o mesmo número) ou, se era o último, para o campo "Novo item". */
+function removerItem(indice) {
+  const removido = itensDoFormulario[indice];
+  if (!removido) return;
+  itensDoFormulario.splice(indice, 1);
+  desenharItensDoFormulario();
+  const proximo = listaItensForm.querySelector('[data-indice="' + indice + '"]');
+  (proximo || campoNovoItem).focus();
+  anunciarNoFormulario(removido.texto + " removido.");
+}
+
+
+/* ---------------------------------------------------------
+   9c. MARCAR O CHECKLIST NO CARD (US18)
+   --------------------------------------------------------- */
+
+/* Abre ou fecha a lista "O que levar" de um card. O foco fica no botão. */
+function alternarChecklist(botao, compromisso) {
+  const abrir = botao.getAttribute("aria-expanded") !== "true";
+  botao.setAttribute("aria-expanded", String(abrir));
+  document.getElementById(botao.getAttribute("aria-controls")).hidden = !abrir;
+  if (abrir) checklistsAbertos.add(compromisso.id); else checklistsAbertos.delete(compromisso.id);
+}
+
+/* Marcou ou desmarcou uma caixa: grava na hora. Não redesenha a lista
+   (o foco continua na caixa): troca só o texto do botão. Sem aviso
+   flutuante: o leitor de tela já diz "marcado" ou "desmarcado". */
+function marcarItemDoChecklist(caixa) {
+  const item = caixa.closest(".compromisso");
+  const compromisso = compromissos.find(function (c) { return c.id === item.dataset.id; });
+  const indice = Number(caixa.dataset.indice);
+  if (!compromisso || !compromisso.itens[indice]) return;
+
+  const listaAntes = compromissos;
+  // Um compromisso novo (Object.assign) com uma lista de itens nova: a
+  // lista antiga fica intacta para voltar atrás se a gravação falhar.
+  const atualizado = Object.assign({}, compromisso, {
+    itens: compromisso.itens.map(function (it, i) {
+      return i === indice ? { texto: it.texto, feito: caixa.checked } : it;
+    }),
+    atualizadoEm: new Date().toISOString()
+  });
+  compromissos = compromissos.map(function (c) { return c.id === compromisso.id ? atualizado : c; });
+
+  // salvarCompromissos também grava "agenda:ultima-mudanca" (US10).
+  if (!salvarCompromissos(compromissos)) {
+    compromissos = listaAntes;
+    caixa.checked = !caixa.checked;   // a caixa volta ao que era
+    mostrarStatus("Não foi possível salvar o compromisso.", "erro");
+    return;
+  }
+  preencherBotaoDoChecklist(item.querySelector(".checklist-botao"), atualizado);
 }
 
 
@@ -1545,6 +2070,16 @@ areaPrincipal.addEventListener("click", function (evento) {
   if (acao === "feito") marcarFeito(compromisso);
   if (acao === "nao-vou-fazer") marcarNaoVouFazer(compromisso);
   if (acao === "desfazer") desfazer(compromisso);
+  // Etapa 3a: abrir e fechar "O que levar" (US18)
+  if (acao === "checklist") alternarChecklist(botao, compromisso);
+});
+
+/* Etapa 3a (US18): marcar e desmarcar as caixas do checklist. O evento
+   "change" acontece no clique, no toque e no Espaço. */
+areaPrincipal.addEventListener("change", function (evento) {
+  if (evento.target.matches('input[data-acao="marcar-item"]')) {
+    marcarItemDoChecklist(evento.target);
+  }
 });
 
 /* Botões "Anteriores" e "Sem data": abrem e fecham a sua lista. Por serem
@@ -1595,6 +2130,32 @@ campoSemData.addEventListener("change", function () {
 });
 opcoesDeSaida.forEach(function (opcao) {
   opcao.addEventListener("change", atualizarCamposDependentes);
+});
+
+// Etapa 3a (US19): um campo da hora de fim preenche o outro na hora.
+// Depois do atualizarCamposDependentes acima (que limpa tudo sem Hora).
+["input", "change"].forEach(function (tipoDeEvento) {
+  campoHora.addEventListener(tipoDeEvento, aoMudarHora);
+  campoFim.addEventListener(tipoDeEvento, aoMudarFim);
+  campoDuracao.addEventListener(tipoDeEvento, aoMudarDuracao);
+});
+campoDuracaoMin.addEventListener("input", aoMudarDuracao);
+
+// Etapa 3a (US17): checklist do formulário.
+botaoAdicionar.addEventListener("click", adicionarItem);
+campoNovoItem.addEventListener("keydown", function (evento) {
+  // isComposing: Enter que só confirma um acento ou uma palavra do teclado
+  // do celular não conta.
+  if (evento.key !== "Enter" || evento.isComposing) return;
+  // Enter aqui NÃO salva o formulário (exceção à regra da US02).
+  evento.preventDefault();
+  // Com 20 itens o campo está "indisponível": o Enter é ignorado.
+  if (campoNovoItem.getAttribute("aria-disabled") === "true") return;
+  adicionarItem();
+});
+listaItensForm.addEventListener("click", function (evento) {
+  const botao = evento.target.closest('button[data-acao="remover-item"]');
+  if (botao) removerItem(Number(botao.dataset.indice));
 });
 
 // Botões "Cancelar" das duas janelas e "Excluir" da confirmação.

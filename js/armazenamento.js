@@ -10,6 +10,8 @@
    - Os dados ficam num objeto { versao: 2, compromissos: [...] }.
      (Até a Entrega 2a era a versão 1; a 2b atualiza sozinha, US11.)
    - Etapa 2a: chaves novas para a cópia dos dados (US08 a US10).
+   - Etapa 3a: continua na versão 2, agora com duracaoMin (hora de fim)
+     e itens (checklist "O que levar") preenchidos e conferidos.
    ========================================================= */
 
 const CHAVE_COMPROMISSOS = "agenda:compromissos";
@@ -100,9 +102,11 @@ function normalizarCompromisso(item, versao) {
     status: status,
     // Só tem valor quando o item foi resolvido ("feito" ou "nao-vou-fazer").
     concluidoEm: status !== "aberto" && isoParaData(item.concluidoEm) !== null ? item.concluidoEm : null,
-    // Reservados para a Etapa 3: na Etapa 2 são sempre null e [].
-    duracaoMin: null,
-    itens: [],
+    // Etapa 3a (US19): hora de fim, guardada como duração. Só vale com
+    // hora e sem passar de 23:59. Na Etapa 2 era sempre null.
+    duracaoMin: duracaoNoMesmoDia(item.duracaoMin, hora) ? item.duracaoMin : null,
+    // Etapa 3a (US17 e US18): checklist "O que levar". Na Etapa 2 era sempre [].
+    itens: normalizarItens(item.itens),
     criadoEm: typeof item.criadoEm === "string" ? item.criadoEm : null,
     atualizadoEm: typeof item.atualizadoEm === "string" ? item.atualizadoEm : null
   };
@@ -111,6 +115,40 @@ function normalizarCompromisso(item, versao) {
 /* Tempo para sair (US12): número inteiro de 1 a 720 minutos (12 horas). */
 function antecedenciaValida(valor) {
   return Number.isInteger(valor) && valor >= 1 && valor <= 720;
+}
+
+
+// Limites do checklist "O que levar" (US17).
+const MAXIMO_DE_ITENS = 20;
+const MAXIMO_DO_TEXTO_DO_ITEM = 60;
+
+/* Hora de fim (US19): a duração vale se for de 1 a 1439 minutos, se o
+   compromisso tiver hora e se o fim não passar de 23:59 (seção 3). */
+function duracaoNoMesmoDia(duracao, hora) {
+  return hora !== null && duracaoValida(duracao) && minutosDoDia(hora) + duracao <= ULTIMO_MINUTO_DO_DIA;
+}
+
+/* Confere a lista do checklist (seção 3, "Regras de leitura dos campos
+   da Etapa 3"):
+   - o que não for lista vira [];
+   - item sem texto (ou só com espaços) é ignorado;
+   - texto maior que 60 é cortado em 60 (e perde os espaços das pontas);
+   - "feito" só é true se for exatamente true;
+   - fica no máximo com 20 itens (do 21º válido em diante, ignorados). */
+function normalizarItens(lista) {
+  if (!Array.isArray(lista)) return [];
+  const certos = [];
+  for (const item of lista) {
+    if (certos.length === MAXIMO_DE_ITENS) break;
+    if (item === null || typeof item !== "object") continue;
+    // textoOuNulo: tira os espaços das pontas e corta no limite. O trim()
+    // de novo tira um espaço que tenha ficado no fim depois do corte.
+    const cortado = textoOuNulo(item.texto, MAXIMO_DO_TEXTO_DO_ITEM);
+    const texto = cortado === null ? "" : cortado.trim();
+    if (texto === "") continue;
+    certos.push({ texto: texto, feito: item.feito === true });
+  }
+  return certos;
 }
 
 

@@ -3,6 +3,8 @@
    Regras da cópia dos dados (Etapa 2a: US08, US09 e US10).
    Etapa 2b: o arquivo sai na versão 2, e a importação aceita
    cópias da versão 1 e da versão 2 (US11).
+   Etapa 3a: o arquivo continua na versão 2 e leva duracaoMin e itens
+   (a conferência deles fica em normalizarCompromisso).
 
    Como o datas.js, este arquivo NÃO mexe na tela e NÃO toca no
    localStorage (quem faz isso é o armazenamento.js). Aqui as funções

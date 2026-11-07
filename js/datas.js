@@ -220,3 +220,83 @@ function calcularSairAs(compromisso, agora) {
     minutos: estado === "logo" ? faltam : null
   };
 }
+
+
+/* ---------------------------------------------------------
+   Etapa 3a: hora de fim, conflito e aperto (US19 e US20)
+   Para estas contas a hora vira um número: os MINUTOS desde
+   00:00 ("09:30" -> 570). Assim "termina antes de" vira um
+   simples "<" entre números.
+   --------------------------------------------------------- */
+
+// O último minuto do dia (23:59). A hora de fim não pode passar dele.
+const ULTIMO_MINUTO_DO_DIA = 23 * 60 + 59;   // 1439
+
+// Sem "Tempo para sair", o aviso de aperto conta 15 minutos (US20).
+const MINUTOS_PARA_SAIR_PADRAO = 15;
+
+/* "09:30" -> 570. */
+function minutosDoDia(textoHora) {
+  const [horas, minutos] = textoHora.split(":").map(Number);
+  return horas * 60 + minutos;
+}
+
+/* 570 -> "09:30". Só para valores de 0 a 1439. */
+function horaDosMinutos(total) {
+  return doisDigitos(Math.floor(total / 60)) + ":" + doisDigitos(total % 60);
+}
+
+/* Duração (US19): inteiro de 1 a 1439 minutos. */
+function duracaoValida(valor) {
+  return Number.isInteger(valor) && valor >= 1 && valor <= ULTIMO_MINUTO_DO_DIA;
+}
+
+/* A hora de fim ("HH:MM") de um compromisso, ou null se ele não tem.
+   fim = hora + duracaoMin (seção 3: só a duração é guardada). */
+function horaDeFim(compromisso) {
+  if (!compromisso.hora || compromisso.duracaoMin === null) return null;
+  return horaDosMinutos(minutosDoDia(compromisso.hora) + compromisso.duracaoMin);
+}
+
+
+/* Aviso de conflito ou de aperto de um compromisso B (US20 e a tabela
+   "Conflito e aperto" da seção 3).
+   - b: o compromisso da lista "Próximos" que vai mostrar o aviso;
+   - doMesmoDia: os compromissos que podem atrapalhar B, JÁ na ordem
+     da US01 (cada A: mesmo dia, com hora, "aberto", que vem antes de B).
+   Devolve null (nada) ou um destes:
+   - { tipo: "conflito", outro: A, fim: null }     -> "mesmo horário de A"
+   - { tipo: "conflito", outro: A, fim: "10:30" }  -> "A vai até 10:30"
+   - { tipo: "aperto", outro: A, fim: "10:30", sair: "10:15" }
+   Conflito vem antes de aperto; entre dois do mesmo tipo vale o
+   primeiro A na ordem da US01 (por isso basta guardar o primeiro). */
+function avisoDeHorario(b, doMesmoDia) {
+  const inicioB = minutosDoDia(b.hora);
+  // Hora de sair para B: a hora dele menos o "Tempo para sair" (ou 15).
+  // Pode dar negativo (sair no dia anterior); a conta continua certa.
+  const sairB = inicioB - (b.antecedenciaMin !== null ? b.antecedenciaMin : MINUTOS_PARA_SAIR_PADRAO);
+
+  let aperto = null;
+  for (const a of doMesmoDia) {
+    const inicioA = minutosDoDia(a.hora);
+
+    // Começam no mesmo minuto: conflito, com ou sem hora de fim.
+    if (inicioA === inicioB) {
+      return { tipo: "conflito", outro: a, fim: null };
+    }
+    // A sem hora de fim (e horário diferente) nunca atrapalha.
+    if (a.duracaoMin === null) continue;
+
+    const fimA = inicioA + a.duracaoMin;
+    // B começa ANTES de A acabar (começar exatamente no fim não conta).
+    if (inicioB < fimA) {
+      return { tipo: "conflito", outro: a, fim: horaDosMinutos(fimA) };
+    }
+    // Sem conflito, mas a hora de sair cai antes do fim de A.
+    // Guardamos só o primeiro aperto e seguimos procurando um conflito.
+    if (aperto === null && sairB < fimA) {
+      aperto = { tipo: "aperto", outro: a, fim: horaDosMinutos(fimA), sair: horaDosMinutos((sairB + 1440) % 1440) };
+    }
+  }
+  return aperto;
+}

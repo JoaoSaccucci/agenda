@@ -1708,6 +1708,328 @@ textarea.campo-controle {
 
 
 /* ---------------------------------------------------------
+   12d. ETAPA 3a: O QUE LEVAR, HORA DE FIM, CONFLITO E APERTO
+   Decisões em: design.md, seção 14.
+   Só variáveis (nada de hex): o tema claro da 3b troca os valores.
+   --------------------------------------------------------- */
+
+/* --- Placa com hora de fim: início em cima, fim embaixo --- */
+.compromisso-hora--intervalo {
+  grid-template-rows: 1fr 1fr;            /* uma hora em cada metade da placa */
+  min-height: 3.75rem;                    /* 60px */
+  padding: var(--esp-1) 2px;
+}
+
+.compromisso-hora-fim {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  color: var(--cor-texto-suave);          /* 7.9:1 na metade de baixo */
+}
+
+/* --- Aviso de conflito e de aperto (só na lista principal) --- */
+.compromisso-aviso {
+  --aviso-cor: var(--cor-perigo);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-2);
+  margin-block: 2px;
+  padding: 6px var(--esp-2);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+  color: var(--cor-texto);
+  background: color-mix(in srgb, var(--aviso-cor) 10%, var(--cor-superficie));
+  border-left: 3px solid var(--aviso-cor);
+  border-radius: var(--raio-sm);
+  overflow-wrap: anywhere;
+}
+
+.compromisso-aviso--conflito { --aviso-cor: var(--cor-perigo); }   /* "Conflito:" 6.3:1 */
+.compromisso-aviso--aperto   { --aviso-cor: var(--cor-ambar); }    /* "Aperto:" 8.6:1 */
+
+.compromisso-aviso .icone {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--aviso-cor);
+}
+
+.compromisso-aviso-tipo {
+  font-weight: 700;
+  color: var(--aviso-cor);
+}
+
+/* --- "O que levar" no card --- */
+.checklist {
+  grid-column: 1 / -1;                    /* celular: largura toda do card */
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .checklist {
+    grid-column: 2;                       /* computador: coluna do texto */
+  }
+}
+
+.checklist-botao {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--esp-2) var(--esp-3);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+  color: var(--cor-texto);
+  background: transparent;
+  border: 1px solid var(--cor-borda-campo);
+  border-radius: var(--raio-md);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--transicao), border-color var(--transicao);
+}
+
+@media (min-width: 640px) {
+  .checklist-botao {
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+
+.checklist-botao:hover {
+  background: var(--cor-superficie-2);
+  border-color: var(--cor-texto-suave);
+}
+
+.checklist-botao .icone {
+  width: 18px;
+  height: 18px;
+}
+
+.checklist-icone {
+  color: var(--cor-lilas);                /* 9.0:1 no card */
+}
+
+.checklist-rotulo {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.checklist-contagem {
+  font-family: var(--fonte-mono);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--cor-texto-suave);
+}
+
+.checklist-seta {
+  color: var(--cor-texto-suave);
+  transition: transform var(--transicao);
+}
+
+.checklist-botao[aria-expanded="true"] .checklist-seta {
+  transform: rotate(180deg);
+}
+
+/* Tudo marcado: ícone (check) e texto verdes, e o texto diz "tudo pronto" */
+.checklist--pronto .checklist-icone,
+.checklist--pronto .checklist-rotulo {
+  color: var(--cor-sucesso);              /* 12.3:1 no card */
+}
+
+.checklist-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Cada item: a caixa de marcar da 2b, na linha inteira */
+.checklist-item {
+  width: 100%;
+  align-items: flex-start;
+  padding: 11px var(--esp-3);             /* 11 + 22 + 11 = 44px de toque */
+  font-size: var(--fs-base);
+  font-weight: 400;
+  line-height: 1.4;
+  border-radius: var(--raio-md);
+  transition: background-color var(--transicao);
+}
+
+.checklist-item > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.checklist-item:hover {
+  background: var(--cor-superficie-2);
+}
+
+/* Marcado: caixa com check + texto riscado e cinza (três sinais) */
+.checklist-item:has(.marcar-caixa:checked) > span {
+  color: var(--cor-texto-suave);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+/* --- Formulário: grupo "Hora de fim" --- */
+.grupo-filete {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+  padding-left: var(--esp-3);
+  border-left: 2px solid var(--cor-borda);   /* enfeite: junta os campos do grupo */
+}
+
+/* Lista de escolha (Duração) com a seta da Agenda */
+.campo-selecao {
+  position: relative;
+}
+
+.campo-selecao select.campo-controle {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.75rem;
+  cursor: pointer;
+}
+
+.campo-selecao select.campo-controle[aria-invalid="true"] {
+  padding-right: calc(2.75rem - 1px);     /* a regra de erro troca o padding todo */
+}
+
+.campo-selecao select.campo-controle:disabled {
+  cursor: not-allowed;
+}
+
+.campo-selecao select option {
+  color: var(--cor-texto);
+  background: var(--cor-superficie);
+}
+
+.campo-selecao::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: var(--esp-3);
+  width: 20px;
+  height: 20px;
+  transform: translateY(-50%);
+  pointer-events: none;                   /* o toque "passa" para o select */
+  background: var(--cor-texto-suave);     /* 8.7:1 no campo */
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Opcional: o campo que o JS ajustou sozinho acende em âmbar e apaga */
+.campo-controle.ajustado {
+  animation: campo-ajustado 900ms ease-out;
+}
+
+@keyframes campo-ajustado {
+  from {
+    border-color: var(--cor-ambar);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--cor-ambar) 35%, transparent);
+  }
+}
+
+/* --- Formulário: grupo "O que levar" --- */
+.itens-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+}
+
+.itens-lista:empty {
+  display: none;                          /* sem itens, sem espaço vazio */
+}
+
+.item-form {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-2);
+  min-height: 48px;
+  padding: 1px 1px 1px var(--esp-3);
+  background: var(--cor-fundo);
+  border: 1px solid var(--cor-borda);     /* enfeite: o texto e o botão dizem o que é */
+  border-radius: var(--raio-md);
+}
+
+.item-form-texto {
+  flex: 1;
+  min-width: 0;
+  padding-block: var(--esp-3) var(--esp-2);
+  overflow-wrap: anywhere;
+}
+
+/* Quadradinho lilás antes do texto (o mesmo enfeite do "Agenda▪") */
+.item-form-texto::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 var(--esp-2) 2px 0;
+  vertical-align: middle;
+  background: var(--cor-lilas);
+  border-radius: 1px;
+}
+
+.item-form--marcado .item-form-texto {
+  color: var(--cor-texto-suave);          /* 8.7:1 */
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.item-form .botao-item {
+  flex-shrink: 0;
+}
+
+.itens-novo {
+  display: flex;
+  align-items: stretch;
+  gap: var(--esp-2);
+}
+
+.itens-novo .campo-controle {
+  flex: 1;
+}
+
+.botao-adicionar {
+  flex-shrink: 0;
+  min-height: 48px;                       /* mesma altura do campo */
+  padding-inline: var(--esp-3);
+  border-radius: var(--raio-md);          /* cantos de campo: uma peça só */
+}
+
+/* 20 itens: campo e botão com cara de desativado.
+   O campo usa aria-disabled + readonly (não perde o foco, ver 14.6). */
+.itens-novo .campo-controle[aria-disabled="true"],
+.itens-novo .campo-controle[aria-disabled="true"]:hover {
+  color: var(--cor-texto-suave);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--cor-borda-campo);
+  cursor: not-allowed;
+}
+
+.botao-adicionar:disabled,
+.botao-adicionar:disabled:hover {
+  color: var(--cor-texto-suave);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--cor-borda-campo);
+  cursor: not-allowed;
+  transform: none;
+}
+
+
+/* ---------------------------------------------------------
    13. MOVIMENTO REDUZIDO
    --------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
@@ -1776,5 +2098,22 @@ textarea.campo-controle {
   .marcar-caixa {
     appearance: auto;
     -webkit-appearance: auto;
+  }
+
+  /* Etapa 3a */
+  .checklist-botao,
+  .compromisso-aviso,
+  .item-form {
+    border: 1px solid CanvasText;
+  }
+
+  .compromisso-aviso {
+    border-left-width: 3px;
+  }
+
+  /* a seta do select é um fundo com máscara: sem isto ela sumiria */
+  .campo-selecao::after {
+    forced-color-adjust: none;
+    background: CanvasText;
   }
 }

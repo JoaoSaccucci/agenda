@@ -164,6 +164,59 @@
         </div>
       </div>
 
+      <!-- Etapa 3a (US19): hora de fim. "Termina às" e "Duração" são duas formas
+           de ver o mesmo valor: o JavaScript preenche um quando o outro muda.
+           Só a duração é guardada (duracaoMin). Sem hora, o JavaScript põe
+           "disabled" no fieldset (desativa os três campos de uma vez) e troca a dica. -->
+      <fieldset class="grupo" id="grupo-fim" aria-describedby="dica-fim">
+        <legend class="campo-rotulo">Hora de fim</legend>
+        <p class="campo-dica" id="dica-fim">Preencha um dos dois: o outro se ajusta sozinho.</p>
+        <p class="campo-dica" id="dica-fim-sem-hora" hidden>Escolha uma hora para usar a hora de fim.</p>
+
+        <div class="grupo-filete">
+          <div class="campos-linha">
+            <div class="campo">
+              <label class="campo-rotulo" for="campo-fim">Termina às</label>
+              <input class="campo-controle" id="campo-fim" name="fim" type="time">
+              <p class="campo-erro" id="erro-fim" hidden>
+                <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
+                <span>A hora de fim precisa ser depois da hora de início.</span>
+              </p>
+            </div>
+            <div class="campo">
+              <label class="campo-rotulo" for="campo-duracao">Duração</label>
+              <div class="campo-selecao">
+                <select class="campo-controle" id="campo-duracao" name="duracao">
+                  <option value="" selected>Sem hora de fim</option>
+                  <option value="30">30 min</option>
+                  <option value="60">1 h</option>
+                  <option value="120">2 h</option>
+                  <option value="outro">Outro</option>
+                </select>
+              </div>
+              <p class="campo-erro" id="erro-duracao" hidden>
+                <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
+                <span>Com essa duração, o compromisso passaria da meia-noite. Escolha uma duração menor.</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Só aparece com "Outro" (mesmo jeito do "Minutos antes" do "Tempo para sair"). -->
+          <div class="campo campo-minutos" id="bloco-duracao-min" hidden>
+            <label class="campo-rotulo" for="campo-duracao-min">Minutos</label>
+            <div class="campo-com-sufixo">
+              <input class="campo-controle" id="campo-duracao-min" name="duracaoMin" type="number" inputmode="numeric" min="1" max="1439" step="1" aria-describedby="dica-duracao-min" data-dica="dica-duracao-min">
+              <span class="campo-sufixo" aria-hidden="true">min</span>
+            </div>
+            <p class="campo-dica" id="dica-duracao-min">De 1 a 1439 minutos.</p>
+            <p class="campo-erro" id="erro-duracao-min" hidden>
+              <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
+              <span>Digite um número de minutos entre 1 e 1439.</span>
+            </p>
+          </div>
+        </div>
+      </fieldset>
+
       <!-- Etapa 2b (US12): "Tempo para sair". Grupo de escolha única com botões de
            opção de verdade (as setas do teclado trocam a opção). Sem hora, o JavaScript
            põe "disabled" no fieldset (desativa tudo de uma vez) e mostra a dica,
@@ -213,6 +266,35 @@
         <label class="campo-rotulo" for="campo-obs">Observação</label>
         <textarea class="campo-controle" id="campo-obs" name="observacao" rows="3" maxlength="500"></textarea>
       </div>
+
+      <!-- Etapa 3a (US17): checklist "O que levar". Os itens só são gravados
+           ao Salvar; até lá ficam numa lista na memória (app.js). -->
+      <fieldset class="grupo" id="grupo-itens">
+        <legend class="campo-rotulo">O que levar</legend>
+
+        <!-- O JavaScript monta aqui os itens. Sem itens, a lista fica vazia
+             (o CSS a esconde com :empty, por isso nada de espaço aqui dentro). -->
+        <ul class="itens-lista" id="itens-lista" aria-label="Itens para levar"></ul>
+
+        <div class="campo">
+          <label class="campo-rotulo" for="campo-novo-item">Novo item</label>
+          <!-- Enter neste campo adiciona o item e NÃO salva o formulário (US17).
+               Com 20 itens o campo recebe aria-disabled + readonly, e não
+               disabled: assim o foco não se perde (design, seção 14.6). -->
+          <div class="itens-novo">
+            <input class="campo-controle" id="campo-novo-item" type="text" maxlength="60" autocomplete="off" placeholder="Ex.: chave" enterkeyhint="done">
+            <button class="btn btn-secundario botao-adicionar" type="button" id="botao-adicionar">
+              <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>
+              Adicionar
+            </button>
+          </div>
+          <p class="campo-dica" id="dica-itens-limite" hidden>Limite de 20 itens.</p>
+        </div>
+
+        <!-- Região de avisos do formulário, só para o leitor de tela
+             ("Cartão do convênio adicionado."). SEMPRE no HTML, vazia. -->
+        <p class="sr-only" id="itens-aviso" aria-live="polite"></p>
+      </fieldset>
 
       <!-- Aviso de localStorage cheio, DENTRO da janela (a faixa do topo da página
            ficaria escondida atrás dela). role="alert": o leitor de tela lê na hora

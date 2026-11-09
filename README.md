@@ -15,6 +15,8 @@ Um site simples para anotar compromissos. Você vê os próximos compromissos ag
 - **Hora de fim:** diga até que horas vai o compromisso, pela hora ("Termina às") ou pela duração (30 min, 1 h, 2 h ou outro valor). Um campo preenche o outro, e o card mostra "09:30 – 10:30".
 - **Conflito e aperto:** se dois compromissos do mesmo dia se atropelam, o card avisa "Conflito"; se não dá tempo de sair de um para o outro (pelo "Tempo para sair" ou 15 minutos), avisa "Aperto". O aviso nunca impede de salvar.
 - **O que levar:** uma lista de até 20 itens em cada compromisso, que você vai marcando direto no card até aparecer "tudo pronto".
+- **Próximos 7 dias:** uma faixa mostra hoje e os 6 dias seguintes, com quantos compromissos cada um tem ou "Livre". Tocar num dia ocupado leva a lista até ele.
+- **Tema claro e letra grande:** os botões "Tema claro" e "Letra grande" trocam a aparência na hora. A escolha fica guardada neste navegador e já vale ao abrir a página, sem piscar (ela não vai na cópia dos dados).
 - **Sem data:** anote algo que ainda não tem dia marcado ("Ainda sem data") e use **Agendar** quando souber.
 - **Cópia dos dados:** o botão "Seus dados" baixa um arquivo `agenda-AAAA-MM-DD.json` com todos os compromissos.
 - **Importar uma cópia:** abre um arquivo baixado pela Agenda e deixa escolher entre **Juntar** (acrescenta, sem apagar nada) e **Substituir tudo** (com confirmação). Serve para recuperar os dados ou levar a agenda para outro aparelho.
@@ -24,7 +26,8 @@ Um site simples para anotar compromissos. Você vê os próximos compromissos ag
 ## Tecnologias
 
 - HTML, CSS e JavaScript puros: sem framework, sem bibliotecas, sem back-end e sem etapa de build.
-- `localStorage` do navegador para guardar os compromissos.
+- `localStorage` do navegador para guardar os compromissos e as preferências de aparência.
+- Variáveis CSS (custom properties) para os dois temas, um script pequeno no `<head>` para aplicar o tema antes de a página aparecer, e `aria-pressed` nos botões de liga e desliga.
 - `<fieldset>` com botões de opção e caixas de marcar para "Tempo para sair", "Me cobrar", "Ainda sem data" e o checklist "O que levar" (no card, um botão que abre uma lista de caixas de marcar), e `<select>` para a duração.
 - `<dialog>` do HTML para o formulário, as confirmações e as janelas de cópia e importação.
 - `Blob` e um link com `download` para gerar o arquivo de cópia no próprio navegador, e `<input type="file">` para escolher o arquivo a importar.
@@ -56,12 +59,12 @@ agenda/
 ├── index.html          # a página (uma só)
 ├── favicon.svg         # ícone da aba
 ├── .gitattributes      # fim de linha padrão (LF)
-├── css/style.css       # visual "quadro de partidas ao anoitecer"
+├── css/style.css       # visual "quadro de partidas" (tema escuro e claro, letra normal e grande)
 └── js/
     ├── datas.js          # regras de data e hora (Hoje, Amanhã, "passou", seção de cada item, "Sair às", hora de fim, conflito e aperto)
     ├── armazenamento.js  # ler e gravar no localStorage (o único que mexe nele) e atualizar os dados antigos
     ├── copia.js          # regras da cópia: montar o arquivo, conferir a importação, juntar, lembrete
-    └── app.js            # a tela: seções, formulário, checklist, Feito, pendências, excluir, "Seus dados", avisos
+    └── app.js            # a tela: seções, faixa da semana, formulário, checklist, Feito, pendências, excluir, "Seus dados", tema e letra, avisos
 ```
 
 ## Feito com a equipe da João Saccucci Labs

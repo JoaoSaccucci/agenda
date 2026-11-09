@@ -11,6 +11,8 @@
    Desfazer, "Não vou fazer", Remarcar e Agendar (seções 5, 8 e 9b).
    Etapa 3a: hora de fim, aviso de conflito e de aperto, e o
    checklist "O que levar" no card e no formulário (seções 5, 8b e 9c).
+   Etapa 3b: faixa "Próximos 7 dias" (seção 5c) e os botões
+   "Tema claro" e "Letra grande" (seção 12b).
 
    Regra de segurança (US01): tudo o que a pessoa digita entra
    na página com textContent, NUNCA com innerHTML. Assim um
@@ -161,6 +163,13 @@ const textoOpcaoSubstituir = document.getElementById("opcao-substituir-texto");
 const janelaSubstituir = document.getElementById("janela-substituir");
 const textoSubstituir = document.getElementById("substituir-texto");
 
+// Etapa 3b: faixa "Próximos 7 dias" (US21) e botões de aparência (US22 e US23)
+const listaSemana = document.getElementById("lista-semana");
+const botaoTema = document.getElementById("botao-tema");
+const botaoLetra = document.getElementById("botao-letra");
+const metaEsquemaDeCor = document.querySelector('meta[name="color-scheme"]');
+const metaCorDoTema = document.querySelector('meta[name="theme-color"]');
+
 
 /* ---------------------------------------------------------
    3. ÍCONES
@@ -198,9 +207,11 @@ const ICONES = {
 const ILUSTRACAO_VAZIO =
   '<svg class="vazio-ilustracao" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 112" width="160" height="112" fill="none" aria-hidden="true" focusable="false">' +
   '<circle cx="130" cy="20" r="11" fill="#FFB547"/>' +
-  '<circle cx="136" cy="15" r="10" fill="#191321"/>' +
-  '<circle cx="108" cy="12" r="1.5" fill="#F5EEE6" opacity=".6"/>' +
-  '<circle cx="150" cy="38" r="1.2" fill="#F5EEE6" opacity=".5"/>' +
+  // Etapa 3b: com estas classes, o tema claro esconde a "sombra" que
+  // faz a lua e as estrelas (de dia, a lua vira sol; design, 15.6).
+  '<circle class="vazio-lua-sombra" cx="136" cy="15" r="10" fill="#191321"/>' +
+  '<circle class="vazio-estrela" cx="108" cy="12" r="1.5" fill="#F5EEE6" opacity=".6"/>' +
+  '<circle class="vazio-estrela" cx="150" cy="38" r="1.2" fill="#F5EEE6" opacity=".5"/>' +
   '<rect x="12" y="34" width="136" height="68" rx="10" fill="#0F0B14" stroke="#3A2F48" stroke-width="2"/>' +
   '<rect x="24" y="46" width="36" height="18" rx="3" fill="#231A2E"/>' +
   '<path d="M24 55h36" stroke="#0F0B14"/>' +
@@ -679,6 +690,10 @@ function criarDia(grupo, agora, secao) {
 
   const h3 = criarElemento("h3", "dia-titulo", titulo.texto);
   h3.id = idDoTitulo;
+  // Etapa 3b (US21): na lista principal, o título do dia pode receber o
+  // foco pelo código (botão do dia na faixa "Próximos 7 dias"), sem
+  // entrar na ordem do Tab. Em "Anteriores" não precisa.
+  if (secao === "proximos") h3.tabIndex = -1;
   if (titulo.contagem) {
     const contagem = criarElemento("span", "dia-contagem");
     const ponto = criarElemento("span", null, " · ");
@@ -712,6 +727,122 @@ function criarVazio() {
   botao.appendChild(document.createTextNode("Novo compromisso"));
   vazio.appendChild(botao);
   return vazio;
+}
+
+
+/* ---------------------------------------------------------
+   5c. ETAPA 3b: FAIXA "PRÓXIMOS 7 DIAS" (US21)
+   --------------------------------------------------------- */
+
+/* "1 compromisso", "3 compromissos" ou "Livre". */
+function textoDaQuantidade(quantidade) {
+  if (quantidade === 0) return "Livre";
+  return quantidade + (quantidade === 1 ? " compromisso" : " compromissos");
+}
+
+/* Os 7 dias da faixa: hoje e os 6 seguintes, em ordem.
+   Devolve [{ data: "2026-11-09", nome: "Hoje", quantidade: 2 }, ...].
+   A quantidade conta só o que está em "Próximos compromissos"
+   (com data, "aberto" e que ainda não passou), inclusive os de dia
+   todo. Por isso recebe a lista já separada (secoes.proximos). */
+function diasDaSemana(proximos, agora) {
+  const contagem = {};
+  proximos.forEach(function (compromisso) {
+    contagem[compromisso.data] = (contagem[compromisso.data] || 0) + 1;
+  });
+
+  const dias = [];
+  for (let i = 0; i < 7; i++) {
+    // new Date(ano, mês, dia + i) "vira o mês" sozinho (31/10 + 1 = 01/11).
+    const dia = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + i);
+    const data = dataParaTexto(dia);
+    let nome = DIAS_DA_SEMANA[dia.getDay()] + " " + dia.getDate();   // "Sex 14"
+    if (i === 0) nome = "Hoje";
+    if (i === 1) nome = "Amanhã";
+    dias.push({ data: data, nome: nome, quantidade: contagem[data] || 0 });
+  }
+  return dias;
+}
+
+/* Um dia da faixa (design, seção 15.8).
+   - Com compromisso: um <button> que leva até o dia na lista.
+   - Livre: um <div> (não é botão e não recebe foco). */
+function criarDiaDaSemana(dia, ehHoje) {
+  const li = criarElemento("li", "semana-dia");
+  if (ehHoje) li.classList.add("semana-dia--hoje");
+
+  const nome = criarElemento("span", "semana-nome", dia.nome);
+  const quantidade = criarElemento("span", "semana-quantidade");
+
+  if (dia.quantidade === 0) {
+    li.classList.add("semana-dia--livre");
+    quantidade.textContent = "Livre";
+    const placa = criarElemento("div", "semana-placa");
+    // A vírgula escondida faz o leitor de tela ler "Ter 11, Livre".
+    placa.append(nome, criarElemento("span", "sr-only", ","), quantidade);
+    li.appendChild(placa);
+    return li;
+  }
+
+  // O número fica num <span> à parte para o CSS pintá-lo de âmbar.
+  quantidade.append(
+    criarElemento("span", "semana-numero", String(dia.quantidade)),
+    dia.quantidade === 1 ? " compromisso" : " compromissos"
+  );
+  const botao = criarElemento("button", "semana-botao");
+  botao.type = "button";
+  botao.dataset.acao = "ir-para-dia";
+  botao.dataset.data = dia.data;
+  // Nome acessível: "Hoje, 2 compromissos" (começa pelo texto visível).
+  // aria-label, e não sr-only, pelo mesmo motivo do botão "Feito".
+  botao.setAttribute("aria-label", dia.nome + ", " + textoDaQuantidade(dia.quantidade));
+  botao.append(nome, quantidade);
+  li.appendChild(botao);
+  return li;
+}
+
+/* Redesenha a faixa. Chamada pelo desenharLista, então ela se atualiza
+   junto com a lista: criar, editar, excluir, importar, Feito, Desfazer
+   e a cada minuto em que algo muda de seção ou o dia vira. */
+function desenharSemana(proximos, agora) {
+  // Se o foco estava num botão da faixa, anotamos o dia para devolver
+  // o foco depois (senão ele "cairia" no topo da página).
+  const ativo = document.activeElement;
+  const dataComFoco = ativo && listaSemana.contains(ativo) ? ativo.dataset.data : null;
+
+  listaSemana.replaceChildren();
+  diasDaSemana(proximos, agora).forEach(function (dia, indice) {
+    listaSemana.appendChild(criarDiaDaSemana(dia, indice === 0));
+  });
+
+  if (dataComFoco) devolverFocoNaSemana(dataComFoco);
+}
+
+/* O foco volta para o botão do mesmo dia. Se esse dia ficou "Livre"
+   (ou saiu da faixa depois da meia-noite), vai para o próximo dia com
+   botão; se não houver nenhum, para o título "Próximos compromissos". */
+function devolverFocoNaSemana(data) {
+  const botoes = Array.from(listaSemana.querySelectorAll(".semana-botao"));
+  // "AAAA-MM-DD" em ordem alfabética já é ordem de data.
+  const alvo = botoes.find(function (botao) { return botao.dataset.data >= data; });
+  if (alvo) {
+    alvo.focus();
+  } else {
+    tituloProximos.focus();
+  }
+}
+
+/* Toque num dia com compromisso: rola até o grupo desse dia na lista
+   "Próximos compromissos" e põe o foco no título (h3) dele. */
+function irParaDia(data) {
+  const titulo = document.getElementById("proximos-dia-" + data);
+  if (!titulo) return;
+  // Quem pediu "menos movimento" no aparelho não vê a rolagem animada.
+  const reduzir = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  titulo.scrollIntoView({ behavior: reduzir ? "auto" : "smooth", block: "start" });
+  // preventScroll: a rolagem já foi pedida acima; sem isso o focus()
+  // pularia direto para o título e cortaria a animação.
+  titulo.focus({ preventScroll: true });
 }
 
 
@@ -752,6 +883,10 @@ function desenharLista() {
   // Se o foco estava num compromisso, anotamos qual para devolver o foco
   // depois de redesenhar (senão ele "cairia" no topo da página).
   const focoAntes = lembrarFocoNaLista();
+  // Etapa 3b: o foco pode estar no título de um dia (depois de tocar num
+  // dia da faixa "Próximos 7 dias"). Anotamos o id para devolvê-lo.
+  const ativo = document.activeElement;
+  const tituloComFoco = ativo && ativo.matches(".proximos .dia-titulo") ? ativo.id : null;
 
   // Etapa 3a (US20): os avisos são calculados de novo a cada desenho
   // (criar, editar, excluir, importar, Feito, Desfazer e a cada minuto
@@ -776,6 +911,10 @@ function desenharLista() {
     });
     listaProximos.appendChild(dias);
   }
+
+  // Etapa 3b (US21): a faixa "Próximos 7 dias" conta o que está na lista
+  // principal, então é desenhada logo depois dela.
+  desenharSemana(secoes.proximos, agora);
 
   // "Sem data" (US16) e "Anteriores" (US06): sem nenhum item, a seção
   // inteira some. O estado aberto/fechado não muda aqui: só o botão muda isso.
@@ -802,6 +941,11 @@ function desenharLista() {
   resumoDaTela = calcularResumo(agora);
 
   if (focoAntes) focarCompromisso(focoAntes.id, focoAntes.acao, focoAntes.indice);
+  if (tituloComFoco) {
+    // O dia pode ter sumido da lista (ex.: o último compromisso dele passou).
+    const titulo = document.getElementById(tituloComFoco);
+    (titulo || tituloProximos).focus({ preventScroll: true });
+  }
 }
 
 
@@ -2022,6 +2166,74 @@ function adiarPeloLembrete() {
 
 
 /* ---------------------------------------------------------
+   12b. ETAPA 3b: TEMA CLARO E LETRA GRANDE (US22 e US23)
+   O estado de verdade fica no <html>: data-tema="claro" e
+   data-letra="grande" (sem atributo = escuro e normal). O script
+   do <head> já ligou o que estava salvo antes de a página
+   aparecer; aqui só lemos o <html> e trocamos ao tocar.
+   --------------------------------------------------------- */
+
+/* As preferências que estão valendo agora, lidas do <html>. */
+function preferenciasAtuais() {
+  const raiz = document.documentElement;
+  return {
+    tema: raiz.getAttribute("data-tema") === "claro" ? "claro" : "escuro",
+    letra: raiz.getAttribute("data-letra") === "grande" ? "grande" : "normal"
+  };
+}
+
+/* A ÚNICA função que muda a aparência. Ela troca, juntos, o atributo
+   do <html> e o aria-pressed do botão, para os dois nunca ficarem
+   diferentes (design, 15.4). O CSS desenha a chavinha pelo atributo;
+   o leitor de tela lê o aria-pressed. Também acerta as duas <meta>
+   de cor (campos nativos e barra do navegador no celular). */
+function aplicarPreferencias(preferencias) {
+  const raiz = document.documentElement;
+  const claro = preferencias.tema === "claro";
+  const grande = preferencias.letra === "grande";
+
+  if (claro) {
+    raiz.setAttribute("data-tema", "claro");
+  } else {
+    raiz.removeAttribute("data-tema");
+  }
+  if (grande) {
+    raiz.setAttribute("data-letra", "grande");
+  } else {
+    raiz.removeAttribute("data-letra");
+  }
+  botaoTema.setAttribute("aria-pressed", String(claro));
+  botaoLetra.setAttribute("aria-pressed", String(grande));
+  metaEsquemaDeCor.setAttribute("content", claro ? "light" : "dark");
+  metaCorDoTema.setAttribute("content", claro ? "#F7F1E8" : "#0F0B14");
+}
+
+/* Toque num dos dois botões: aplica na hora e tenta guardar.
+   Sem localStorage, gravarPreferencias devolve false e a troca vale
+   até a página fechar (sem aviso). O botão não é redesenhado, então
+   o foco continua nele. NÃO grava "agenda:ultima-mudanca". */
+function trocarPreferencia(campo, valorLigado, valorDesligado) {
+  const preferencias = preferenciasAtuais();
+  preferencias[campo] = preferencias[campo] === valorLigado ? valorDesligado : valorLigado;
+
+  // Sem esta classe, cada parte da tela mudaria de cor no seu próprio
+  // ritmo (as transições de 180ms) e a troca pareceria "em ondas".
+  // Ela é tirada dois quadros depois, quando as cores novas já estão
+  // pintadas (o primeiro requestAnimationFrame ainda é antes da pintura).
+  const raiz = document.documentElement;
+  raiz.classList.add("trocando-tema");
+  aplicarPreferencias(preferencias);
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () {
+      raiz.classList.remove("trocando-tema");
+    });
+  });
+
+  gravarPreferencias(preferencias);
+}
+
+
+/* ---------------------------------------------------------
    13. EVENTOS (o que acontece em cada clique ou tecla)
    --------------------------------------------------------- */
 
@@ -2048,6 +2260,12 @@ areaPrincipal.addEventListener("click", function (evento) {
   }
   if (botao.dataset.acao === "lembrete-depois") {
     adiarPeloLembrete();
+    return;
+  }
+
+  // Etapa 3b (US21): um dia da faixa "Próximos 7 dias"
+  if (botao.dataset.acao === "ir-para-dia") {
+    irParaDia(botao.dataset.data);
     return;
   }
 
@@ -2246,11 +2464,24 @@ janelaDados.addEventListener("close", function () {
   botaoDados.focus();
 });
 
+// --- Etapa 3b: botões "Tema claro" e "Letra grande" (US22 e US23) ---
+// São <button>: já funcionam com clique, toque, Enter e Espaço.
+botaoTema.addEventListener("click", function () {
+  trocarPreferencia("tema", "claro", "escuro");
+});
+botaoLetra.addEventListener("click", function () {
+  trocarPreferencia("letra", "grande", "normal");
+});
+
 
 /* ---------------------------------------------------------
    14. INÍCIO
    --------------------------------------------------------- */
 function iniciar() {
+  // Etapa 3b: o script do <head> já aplicou tema e letra no <html>;
+  // aqui o aria-pressed dos botões passa a dizer o mesmo.
+  aplicarPreferencias(preferenciasAtuais());
+
   const resultado = carregarCompromissos();
   compromissos = resultado.compromissos;
 

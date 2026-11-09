@@ -12,6 +12,8 @@
    - Etapa 2a: chaves novas para a cópia dos dados (US08 a US10).
    - Etapa 3a: continua na versão 2, agora com duracaoMin (hora de fim)
      e itens (checklist "O que levar") preenchidos e conferidos.
+   - Etapa 3b: chave nova "agenda:preferencias" (tema e letra),
+     separada dos compromissos (fim do arquivo).
    ========================================================= */
 
 const CHAVE_COMPROMISSOS = "agenda:compromissos";
@@ -363,4 +365,34 @@ function gravarImportacao(lista, substituirTudo) {
   }
 
   return salvarCompromissos(lista);
+}
+
+
+/* ---------------------------------------------------------
+   Etapa 3b: preferências de aparência (US22 e US23)
+   Ficam em "agenda:preferencias", separadas dos compromissos:
+   não mudam a versão dos dados, não vão no arquivo de cópia e
+   não gravam "agenda:ultima-mudanca" (não são mudança nos
+   compromissos, então não contam para o lembrete de cópia).
+   A LEITURA ao abrir a página é feita pelo script do <head> do
+   index.html (precisa rodar antes de a página aparecer). Aqui
+   fica só a gravação.
+   --------------------------------------------------------- */
+const CHAVE_PREFERENCIAS = "agenda:preferencias";
+
+/* Grava { tema: "escuro" | "claro", letra: "normal" | "grande" }.
+   Não usa o armazenamentoDisponivel de propósito: a preferência não
+   depende dos compromissos. Se o localStorage estiver bloqueado ou
+   cheio, devolve false sem aviso: a troca continua valendo até a
+   página fechar (US22). */
+function gravarPreferencias(preferencias) {
+  try {
+    window.localStorage.setItem(CHAVE_PREFERENCIAS, JSON.stringify({
+      tema: preferencias.tema,
+      letra: preferencias.letra
+    }));
+    return true;
+  } catch (erro) {
+    return false;
+  }
 }

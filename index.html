@@ -5,6 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0F0B14">
+  <!-- Etapa 3b (US22 e US23): tema e letra ANTES de a página aparecer, para a
+       tela nunca piscar no tema errado. Por isso este script fica aqui, antes
+       das fontes e do style.css, e não no app.js (que só roda no fim do body).
+       Qualquer problema (sem localStorage, JSON inválido, valor estranho) =
+       padrão (escuro e normal), sem aviso. Só "claro" e "grande" ligam algo. -->
+  <script>
+    (function () {
+      try {
+        const preferencias = JSON.parse(localStorage.getItem("agenda:preferencias"));
+        if (preferencias && preferencias.letra === "grande") {
+          document.documentElement.setAttribute("data-letra", "grande");
+        }
+        if (preferencias && preferencias.tema === "claro") {
+          document.documentElement.setAttribute("data-tema", "claro");
+          document.querySelector('meta[name="color-scheme"]').setAttribute("content", "light");
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", "#F7F1E8");
+        }
+      } catch (erro) {
+        // Fica o padrão. Sem console.error: a US22 pede "sem erro no console".
+      }
+    })();
+  </script>
   <meta name="description" content="Agenda simples para anotar compromissos, agrupados por dia. Os dados ficam só no seu navegador.">
   <title>Agenda</title>
 
@@ -59,6 +81,22 @@
 
   <!-- ===== CONTEÚDO ===== -->
   <main class="container principal">
+    <!-- Etapa 3b (US22 e US23): botões de aparência. Ficam numa barra própria,
+         logo abaixo do cabeçalho e antes das faixas (o cabeçalho não tem espaço).
+         Não é fixa: nunca cobre compromissos. O texto não muda; o estado é dito
+         pelo aria-pressed ("true" = ligado). A chavinha desenhada segue o
+         atributo do <html> (CSS), por isso já aparece certa ao abrir a página. -->
+    <div class="aparencia" role="group" aria-label="Aparência">
+      <button class="btn btn-secundario botao-aparencia botao-aparencia--tema" type="button" id="botao-tema" aria-pressed="false">
+        <span class="aparencia-chave" aria-hidden="true"></span>
+        <span>Tema claro</span>
+      </button>
+      <button class="btn btn-secundario botao-aparencia botao-aparencia--letra" type="button" id="botao-letra" aria-pressed="false">
+        <span class="aparencia-chave" aria-hidden="true"></span>
+        <span>Letra grande</span>
+      </button>
+    </div>
+
     <!-- Avisos que ficam na tela: primeiro os problemas com o localStorage,
          por último o lembrete de cópia (US10). Vazio quando está tudo bem. -->
     <div class="faixas" id="faixas" aria-live="polite"></div>
@@ -73,6 +111,15 @@
       <p class="pendentes-texto">Passou da data e você pediu para ser cobrado.</p>
       <!-- O JavaScript monta aqui os itens (lista simples, sem grupos por dia). -->
       <ul class="compromissos" id="lista-pendentes"></ul>
+    </section>
+
+    <!-- Etapa 3b (US21): faixa "Próximos 7 dias". Sempre visível (com a lista
+         vazia, os 7 dias aparecem "Livre"). Sem aria-live: ela é redesenhada
+         a cada minuto e o leitor de tela não deve ler isso toda hora. -->
+    <section class="semana" id="secao-semana" aria-labelledby="titulo-semana">
+      <h2 class="secao-titulo" id="titulo-semana">Próximos 7 dias</h2>
+      <!-- O JavaScript monta aqui os 7 <li> (hoje e os 6 seguintes, em ordem). -->
+      <ul class="semana-lista" id="lista-semana"></ul>
     </section>
 
     <section class="proximos" aria-labelledby="titulo-proximos">

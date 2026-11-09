@@ -75,6 +75,53 @@
 
 
 /* ---------------------------------------------------------
+   1b. TEMA CLARO E LETRA GRANDE (Etapa 3b)
+   Decisões em: design.md, seção 15.
+   O <html> recebe data-tema="claro" e/ou data-letra="grande"
+   (script do <head> e app.js). Sem atributo = escuro e normal.
+   Contrastes conferidos em design.md, 15.6 e 15.13.
+   --------------------------------------------------------- */
+:root[data-tema="claro"] {
+  color-scheme: light;           /* data, hora, select e barra de rolagem claros */
+
+  /* Fundos ("a estação de manhã": papel creme) */
+  --cor-fundo: #F7F1E8;
+  --cor-superficie: #FFFCF7;
+  --cor-superficie-2: #EFE6DA;
+  --cor-placa-baixo: #E8DDCF;
+
+  /* Bordas: a decorativa continua só enfeite; a de campo tem 3.7:1 ou mais */
+  --cor-borda: #DDD1C3;
+  --cor-borda-campo: #7D7088;
+
+  /* Texto (tinta ameixa) */
+  --cor-texto: #23182B;          /* 15.1:1 no fundo */
+  --cor-texto-suave: #5B4C63;    /* 7.0:1 no fundo */
+
+  /* Destaques: escuros, porque também são cor de texto */
+  --cor-ambar: #8A4A00;          /* caramelo: 6.1:1 no fundo */
+  --cor-ambar-claro: #6F3B00;    /* hover do botão principal: no claro, escurece */
+  --cor-lilas: #6436B5;          /* 6.8:1 no fundo */
+  --cor-foco: #0B5FC0;           /* SÓ o contorno de foco: 5.5:1 no fundo */
+  --cor-perigo: #B42318;         /* 5.9:1 no fundo */
+  --cor-perigo-claro: #8E1B12;   /* hover do Excluir cheio: no claro, escurece */
+  --cor-sucesso: #1D6B3B;        /* 5.8:1 no fundo */
+  --cor-sobre-cor: #FFF8EE;      /* texto creme sobre âmbar (6.5:1) e perigo (6.2:1) */
+
+  /* Sombras mais leves (no claro, a sombra preta a 50% fica "suja") */
+  --sombra: 0 12px 32px rgba(35, 24, 43, 0.18);
+  --brilho-ambar: 0 4px 16px rgba(138, 74, 0, 0.28);
+}
+
+/* Letra grande: tudo em rem cresce 25%. Em % (e não em px) para
+   respeitar a letra escolhida no navegador e o zoom. */
+:root[data-letra="grande"] {
+  font-size: 125%;
+  scroll-padding-top: 8rem;      /* o cabeçalho pode ter 2 linhas */
+}
+
+
+/* ---------------------------------------------------------
    2. RESET
    --------------------------------------------------------- */
 *,
@@ -888,6 +935,12 @@ body:has(.status:not(:empty)) {
   border: 1px solid var(--cor-borda-campo);
   border-radius: var(--raio-md);
   transition: border-color var(--transicao);
+}
+
+/* Texto de exemplo (placeholder) com contraste AA nos dois temas (pendência da 3b). */
+.campo-controle::placeholder {
+  color: var(--cor-texto-suave);
+  opacity: 1;
 }
 
 .campo-controle:hover {
@@ -2030,6 +2083,282 @@ textarea.campo-controle {
 
 
 /* ---------------------------------------------------------
+   12e. ETAPA 3b: APARÊNCIA, FAIXA DA SEMANA, TEMA CLARO E LETRA GRANDE
+   Decisões em: design.md, seção 15.
+   --------------------------------------------------------- */
+
+/* --- Barra "Aparência": logo abaixo do cabeçalho, não fixa --- */
+.aparencia {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--esp-2);
+  margin-bottom: var(--esp-5);
+}
+
+.botao-aparencia {
+  flex: 1 1 auto;                         /* celular: dividem a largura */
+  padding-inline: var(--esp-3);
+  font-size: var(--fs-sm);
+}
+
+@media (min-width: 640px) {
+  .botao-aparencia {
+    flex: 0 0 auto;                       /* computador: à direita, do tamanho do texto */
+  }
+}
+
+/* A chavinha: trilho de 32 x 18px e bolinha de 10px (em rem: cresce com a letra) */
+.aparencia-chave {
+  position: relative;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 1.125rem;
+  border: 2px solid var(--cor-borda-campo);   /* 4.9:1 escuro · 4.1:1 claro */
+  border-radius: var(--raio-pill);
+  transition: background-color var(--transicao), border-color var(--transicao);
+}
+
+.aparencia-chave::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 0.625rem;
+  height: 0.625rem;
+  background: var(--cor-texto-suave);
+  border-radius: 50%;
+  transform: translateY(-50%);
+  transition: transform var(--transicao);
+}
+
+/* Ligado. Segue o atributo do <html> (aplicado no <head>), e não o
+   aria-pressed (sincronizado só quando o app.js roda): assim a chave
+   nunca aparece no estado errado ao abrir a página. */
+:root[data-tema="claro"] .botao-aparencia--tema,
+:root[data-letra="grande"] .botao-aparencia--letra {
+  border-color: var(--cor-ambar);
+}
+
+:root[data-tema="claro"] .botao-aparencia--tema .aparencia-chave,
+:root[data-letra="grande"] .botao-aparencia--letra .aparencia-chave {
+  background: var(--cor-ambar);
+  border-color: var(--cor-ambar);
+}
+
+:root[data-tema="claro"] .botao-aparencia--tema .aparencia-chave::after,
+:root[data-letra="grande"] .botao-aparencia--letra .aparencia-chave::after {
+  background: var(--cor-sobre-cor);
+  /* largura do trilho - 2 bordas - 2 folgas - bolinha */
+  transform: translate(calc(1.375rem - 8px), -50%);
+}
+
+/* --- Faixa "Próximos 7 dias" (US21) --- */
+.semana {
+  margin-bottom: var(--esp-6);
+}
+
+.semana-lista {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--esp-2);
+}
+
+.semana-dia {
+  display: flex;                          /* a plaquinha estica até a altura da linha */
+  min-width: 0;
+}
+
+/* Celular: "Hoje" na linha toda (1 + 2 + 2 + 2 = 7) */
+@media (max-width: 639.98px) {
+  .semana-dia--hoje {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 640px) {
+  .semana-lista {
+    grid-template-columns: repeat(auto-fill, minmax(8.75rem, 1fr));   /* 4 por linha */
+  }
+}
+
+.semana-botao,
+.semana-placa {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  min-height: 3.5rem;                     /* 56px: acima dos 44px de toque */
+  padding: var(--esp-2) var(--esp-3);
+  text-align: left;
+  line-height: 1.25;
+  border-radius: var(--raio-md);
+}
+
+/* Dia com compromisso: a placa de duas metades, com contorno de botão */
+.semana-botao {
+  color: var(--cor-texto);
+  background: linear-gradient(to bottom, var(--cor-superficie-2) 50%, var(--cor-placa-baixo) 50%);
+  border: 1px solid var(--cor-borda-campo);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--transicao), border-color var(--transicao),
+              transform var(--transicao);
+}
+
+.semana-botao:hover {
+  background: var(--cor-superficie-2);
+  border-color: var(--cor-texto-suave);
+}
+
+.semana-botao:active {
+  transform: scale(0.98);
+}
+
+/* Dia livre: vazio e tracejado. O que diz "livre" é o texto. */
+.semana-placa {
+  color: var(--cor-texto-suave);
+  border: 1px dashed var(--cor-borda);    /* enfeite */
+}
+
+.semana-nome {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-2);
+  font-size: var(--fs-base);
+  font-weight: 700;
+}
+
+.semana-quantidade {
+  max-width: 100%;
+  font-size: var(--fs-sm);
+  color: var(--cor-texto-suave);
+  overflow-wrap: anywhere;                /* segurança: nunca rola para o lado */
+}
+
+.semana-numero {
+  font-family: var(--fonte-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--cor-ambar);
+}
+
+/* Hoje: nome âmbar com o quadradinho (o mesmo do título "Hoje") */
+.semana-dia--hoje .semana-nome {
+  color: var(--cor-ambar);
+}
+
+.semana-dia--hoje .semana-nome::before {
+  content: "";
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  border-radius: 2px;
+}
+
+/* Títulos dos dias recebem o foco pelo código (tabindex="-1"):
+   contorno só para quem está no teclado. */
+.proximos .dia-titulo:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* --- Tema claro: o que não é variável --- */
+:root[data-tema="claro"] body {
+  background-image:
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(255, 181, 71, 0.16), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 0% 100%, rgba(196, 168, 255, 0.12), transparent 70%);
+}
+
+:root[data-tema="claro"] body::before {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(35, 24, 43, 0.035) 0 1px,
+    transparent 1px 56px
+  );
+}
+
+:root[data-tema="claro"] .cabecalho {
+  background: rgba(247, 241, 232, 0.88);
+}
+
+/* Sem var() de propósito: navegadores antigos não passam variáveis para o ::backdrop */
+:root[data-tema="claro"] .janela::backdrop {
+  background: rgba(35, 24, 43, 0.45);
+}
+
+/* Check creme sobre o caramelo (o escuro daria só 2.7:1) */
+:root[data-tema="claro"] .marcar-caixa:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FFF8EE' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+}
+
+/* Ilustração da lista vazia: de dia, a lua vira sol e as estrelas somem */
+:root[data-tema="claro"] .vazio-lua-sombra,
+:root[data-tema="claro"] .vazio-estrela {
+  display: none;
+}
+
+/* Durante a troca de tema, nada "desbota" aos poucos (o app.js põe
+   e tira esta classe do <html> em volta da troca) */
+:root.trocando-tema *,
+:root.trocando-tema *::before,
+:root.trocando-tema *::after {
+  transition: none !important;
+}
+
+/* --- Letra grande: ajustes para caber a 360px --- */
+:root[data-letra="grande"] .cabecalho-conteudo {
+  flex-wrap: wrap;                        /* exceção da US23: pode ter 2 linhas */
+  row-gap: var(--esp-2);
+  padding-block: var(--esp-2);
+}
+
+:root[data-letra="grande"] .cabecalho-acoes {
+  margin-left: auto;                      /* na 2ª linha, os botões ficam à direita */
+}
+
+:root[data-letra="grande"] .btn {
+  white-space: normal;                    /* texto longo quebra dentro do botão */
+  text-align: center;
+}
+
+/* [Correção do testador, Etapa 3b] Com a letra grande, no celular, a barra
+   Cancelar/Salvar empilha os botões (≈148px de altura) e os 6rem (120px)
+   de scroll-padding-bottom não bastavam: o aviso "Não foi possível salvar
+   o compromisso." ficava meio escondido atrás da barra. 9rem = 180px. */
+:root[data-letra="grande"] .janela {
+  scroll-padding-bottom: 9rem;
+}
+
+:root[data-letra="grande"] .itens-novo {
+  flex-wrap: wrap;
+}
+
+:root[data-letra="grande"] .itens-novo .campo-controle {
+  flex: 1 1 10rem;
+}
+
+:root[data-letra="grande"] .botao-adicionar {
+  flex: 1 0 auto;                         /* no celular desce e ocupa a largura toda */
+}
+
+@media (max-width: 479.98px) {
+  :root[data-letra="grande"] .escolhas {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 359.98px) {
+  :root[data-letra="grande"] .semana-lista {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+
+/* ---------------------------------------------------------
    13. MOVIMENTO REDUZIDO
    --------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
@@ -2045,6 +2374,12 @@ textarea.campo-controle {
   .btn:hover,
   .btn:active,
   .botao-item:active {
+    transform: none;
+  }
+
+  /* Etapa 3b (a chavinha já fica sem transição pela regra geral; a
+     rolagem até o dia é sem animação pelo próprio app.js) */
+  .semana-botao:active {
     transform: none;
   }
 }
@@ -2115,5 +2450,36 @@ textarea.campo-controle {
   .campo-selecao::after {
     forced-color-adjust: none;
     background: CanvasText;
+  }
+
+  /* Etapa 3b */
+  .semana-botao {
+    border: 1px solid ButtonText;
+  }
+
+  .semana-placa {
+    border: 1px dashed CanvasText;
+  }
+
+  .aparencia-chave {
+    border-color: ButtonText;
+  }
+
+  /* a bolinha é um fundo: sem isto ela sumiria */
+  .aparencia-chave::after {
+    forced-color-adjust: none;
+    background: ButtonText;
+  }
+
+  :root[data-tema="claro"] .botao-aparencia--tema .aparencia-chave,
+  :root[data-letra="grande"] .botao-aparencia--letra .aparencia-chave {
+    forced-color-adjust: none;
+    background: Highlight;
+    border-color: Highlight;
+  }
+
+  :root[data-tema="claro"] .botao-aparencia--tema .aparencia-chave::after,
+  :root[data-letra="grande"] .botao-aparencia--letra .aparencia-chave::after {
+    background: HighlightText;
   }
 }

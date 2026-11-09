@@ -13,6 +13,8 @@
    checklist "O que levar" no card e no formulário (seções 5, 8b e 9c).
    Etapa 3b: faixa "Próximos 7 dias" (seção 5c) e os botões
    "Tema claro" e "Letra grande" (seção 12b).
+   Etapa 4a: campo "Criar por frase" e a linha "Entendi" no
+   formulário (seção 8c). Quem entende a frase é o frase.js.
 
    Regra de segurança (US01): tudo o que a pessoa digita entra
    na página com textContent, NUNCA com innerHTML. Assim um
@@ -73,6 +75,10 @@ const checklistsAbertos = new Set();
 // Etapa 3a (US20): avisos de conflito e de aperto da lista que está
 // sendo desenhada, por id do compromisso ("Map" = tabela id -> aviso).
 let avisosDeHorario = new Map();
+
+// Etapa 4a (US24): true enquanto o formulário aberto veio do campo
+// "Criar por frase". Depois de Salvar, o campo da frase é limpo.
+let abertoPelaFrase = false;
 
 
 /* ---------------------------------------------------------
@@ -169,6 +175,13 @@ const botaoTema = document.getElementById("botao-tema");
 const botaoLetra = document.getElementById("botao-letra");
 const metaEsquemaDeCor = document.querySelector('meta[name="color-scheme"]');
 const metaCorDoTema = document.querySelector('meta[name="theme-color"]');
+// Etapa 4a (US24 e US28)
+const formFrase = document.getElementById("form-frase");
+const campoFrase = document.getElementById("campo-frase");
+const entendi = document.getElementById("entendi");
+const entendiLinha = document.getElementById("entendi-linha");
+const entendiNota = document.getElementById("entendi-nota");
+const entendiNotaTexto = document.getElementById("entendi-nota-texto");
 
 
 /* ---------------------------------------------------------
@@ -1247,11 +1260,14 @@ function atualizarCamposDependentes() {
 
 /* Abre o formulário.
    compromisso = null para criar um novo, ou o compromisso a mudar.
-   modo = "novo", "editar", "remarcar" ou "agendar". */
-function abrirFormulario(compromisso, botao, modo) {
+   modo = "novo", "editar", "remarcar" ou "agendar".
+   rascunho (Etapa 4a, só no modo "novo"): { resultado, agora } quando o
+   formulário abre pelo campo "Criar por frase" (resultado = entenderFrase). */
+function abrirFormulario(compromisso, botao, modo, rascunho) {
   botaoQueAbriu = botao;
   focoDepoisDeFechar = null;
   modoDoFormulario = modo;
+  abertoPelaFrase = Boolean(rascunho);
   formulario.reset();   // limpa os campos e volta as caixas e opções ao padrão
   erroSalvar.hidden = true;
   esconderErro(campoTitulo, erroTitulo);
@@ -1293,13 +1309,21 @@ function abrirFormulario(compromisso, botao, modo) {
     idEmEdicao = null;
     campoData.value = hojeEmTexto(new Date());   // a data já vem com hoje
     itensDoFormulario = [];
+    if (rascunho) preencherRascunho(rascunho.resultado);
   }
 
+  // Etapa 4a: a linha "Entendi" é montada (ou escondida) em TODA abertura,
+  // para a linha de uma frase antiga nunca aparecer num "Editar".
+  prepararEntendi(rascunho);
   atualizarCamposDependentes();
   desenharItensDoFormulario();
 
   // showModal(): abre por cima da página; Esc fecha e o Tab fica preso dentro.
   janelaCompromisso.showModal();
+  // Etapa 4a (US27): frase só com data e hora -> título vazio, com o erro
+  // "Digite um título." já visível. O foco vai para o Título logo abaixo
+  // (é o primeiro campo com erro, US03).
+  if (rascunho && campoTitulo.value === "") mostrarErro(campoTitulo, erroTitulo);
   // Remarcar e Agendar: a pessoa veio mudar a data, então o foco vai para ela.
   if (modo === "remarcar" || modo === "agendar") {
     campoData.focus();
@@ -1488,6 +1512,9 @@ function salvarFormulario() {
   }
 
   const aviso = avisoDoFormulario(modo, antes, depois, agora);
+  // Etapa 4a (US24): salvou o rascunho da frase -> o campo fica vazio,
+  // pronto para a próxima (o foco volta para ele ao fechar a janela).
+  if (abertoPelaFrase) campoFrase.value = "";
   desenharLista();
   if (modo === "editar") {
     // Editou: o foco volta para o "Editar" desse compromisso (redesenhado).
@@ -1736,6 +1763,102 @@ function removerItem(indice) {
   const proximo = listaItensForm.querySelector('[data-indice="' + indice + '"]');
   (proximo || campoNovoItem).focus();
   anunciarNoFormulario(removido.texto + " removido.");
+}
+
+
+/* ---------------------------------------------------------
+   8d. ETAPA 4a: CRIAR POR FRASE E A LINHA "ENTENDI" (US24 a US28)
+   O frase.js entende a frase; aqui só preenchemos o formulário
+   (o rascunho) e montamos a linha "Entendi". Nada é salvo até
+   a pessoa apertar "Salvar".
+   --------------------------------------------------------- */
+
+// Classe de cor de cada tipo de parte da linha (design, seção 16.5).
+const CLASSE_DA_PARTE = {
+  "hora": "entendi-valor--hora",
+  "sem-data": "entendi-valor--sem-data"
+};
+
+/* Preenche Título, Data, Hora e "Ainda sem data" com o que a frase
+   disse. O resto do formulário fica como no "Novo compromisso". */
+function preencherRascunho(resultado) {
+  campoTitulo.value = resultado.titulo;
+  campoSemData.checked = resultado.semData;
+  // Data que não existe ("31/02"): a Data abre VAZIA (nunca trocamos
+  // sozinhos por outra data); "Escolha uma data." só aparece ao salvar.
+  campoData.value = resultado.data || "";
+  campoHora.value = resultado.hora || "";
+}
+
+/* Mostra a tira "Entendi" (aberto pela frase) ou a esconde (qualquer
+   outro jeito de abrir). A janela só fica ligada a ela pelo
+   aria-describedby quando ela aparece: assim o leitor de tela lê a
+   linha uma vez, ao abrir, logo depois do título da janela. */
+function prepararEntendi(rascunho) {
+  if (!rascunho) {
+    entendi.hidden = true;
+    entendiLinha.replaceChildren();
+    entendiNotaTexto.textContent = "";
+    entendiNota.hidden = true;
+    janelaCompromisso.removeAttribute("aria-describedby");
+    return;
+  }
+
+  const resultado = rascunho.resultado;
+  montarLinhaEntendi(partesDoEntendi(resultado, rascunho.agora));
+
+  // Uma nota por vez: a data que não existe tem prioridade sobre a dica
+  // de "nada entendido" (as duas nunca valem juntas pelo frase.js).
+  let nota = "";
+  if (resultado.dataInexistente) {
+    nota = "A data " + resultado.dataInexistente + " não existe. Escolha uma data.";
+  } else if (resultado.nadaEntendido) {
+    nota = "Não encontrei data nem hora. Confira os campos.";
+  }
+  entendiNotaTexto.textContent = nota;
+  entendiNota.hidden = nota === "";
+
+  entendi.hidden = false;
+  janelaCompromisso.setAttribute("aria-describedby", "entendi");
+}
+
+/* Monta "Entendi: Amanhã · 10:00 · título 'Dentista'" só com
+   createElement e textContent: o título vem da frase e nunca vira HTML.
+   O "·" fica escondido do leitor de tela (aria-hidden) e, no lugar dele,
+   uma vírgula só para o leitor (sr-only) dá a pausa sem ler "ponto". */
+function montarLinhaEntendi(partes) {
+  entendiLinha.replaceChildren(criarElemento("span", "entendi-rotulo", "Entendi:"), " ");
+
+  partes.forEach(function (parte, posicao) {
+    if (posicao > 0) {
+      const separador = criarElemento("span", "entendi-sep", " · ");   // espaço inseparável antes do "·"
+      separador.setAttribute("aria-hidden", "true");
+      entendiLinha.append(criarElemento("span", "sr-only", ","), separador);
+    }
+    const classe = "entendi-valor" + (CLASSE_DA_PARTE[parte.tipo] ? " " + CLASSE_DA_PARTE[parte.tipo] : "");
+    const valor = criarElemento("span", classe, parte.texto);
+    if (parte.tipo === "titulo") {
+      entendiLinha.append("título '", valor, "'");   // texto puro (append com texto = nó de texto)
+    } else {
+      entendiLinha.append(valor);
+    }
+  });
+
+  // Ponto escondido no fim: pausa antes da nota, no leitor de tela.
+  entendiLinha.append(criarElemento("span", "sr-only", "."));
+}
+
+/* "Criar" ou Enter no campo da frase. Campo vazio (ou só espaços):
+   nada abre, sem mensagem, e o foco fica no campo (como o "Adicionar"). */
+function criarPelaFrase() {
+  const frase = campoFrase.value;
+  if (frase.trim() === "") {
+    campoFrase.focus();
+    return;
+  }
+  const agora = new Date();
+  // O foco volta para o campo da frase ao fechar (botaoQueAbriu).
+  abrirFormulario(null, campoFrase, "novo", { resultado: entenderFrase(frase, agora), agora: agora });
 }
 
 
@@ -2390,8 +2513,16 @@ janelaExcluir.querySelector('[data-acao="confirmar-exclusao"]').addEventListener
 janelaCompromisso.addEventListener("close", function () {
   idEmEdicao = null;
   modoDoFormulario = "novo";
+  abertoPelaFrase = false;
   erroSalvar.hidden = true;   // fechou: o aviso de "não foi possível salvar" some
   devolverFoco();
+});
+
+// Etapa 4a (US24): "Criar" (clique, toque, Enter ou Espaço) e Enter dentro
+// do campo da frase chegam aqui, como "submit" do <form> da frase.
+formFrase.addEventListener("submit", function (evento) {
+  evento.preventDefault();   // não recarregar a página
+  criarPelaFrase();
 });
 janelaExcluir.addEventListener("close", function () {
   idParaExcluir = null;

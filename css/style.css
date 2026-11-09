@@ -2359,6 +2359,147 @@ textarea.campo-controle {
 
 
 /* ---------------------------------------------------------
+   12f. ETAPA 4a: CRIAR POR FRASE E A LINHA "ENTENDI"
+   Decisões em: design.md, seção 16.
+   Só variáveis: vale nos dois temas e com a letra grande.
+   Contrastes conferidos em design.md, 16.11.
+   --------------------------------------------------------- */
+
+/* --- Painel "Criar por frase" (o "guichê"): logo abaixo da
+       barra "Aparência", antes das faixas. Não é fixo. --- */
+.frase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+  margin-bottom: var(--esp-5);
+  padding: var(--esp-3);
+  background: var(--cor-superficie);
+  border: 1px solid var(--cor-borda);       /* enfeite: o rótulo diz o que é */
+  border-radius: var(--raio-lg);
+}
+
+@media (min-width: 640px) {
+  .frase {
+    padding: var(--esp-4);                  /* como o card do compromisso */
+  }
+}
+
+.frase-rotulo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-2);
+  width: fit-content;
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+
+.frase-rotulo .icone {
+  color: var(--cor-ambar);                  /* balão: 10.4:1 escuro · 6.7:1 claro */
+}
+
+/* A dica fica colada no rótulo (o gap do painel já separa do campo) */
+.frase .campo-dica {
+  margin-top: calc(-1 * var(--esp-1));
+}
+
+/* Campo + botão. Celular: um embaixo do outro, os dois na largura toda. */
+.frase-linha {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+}
+
+/* Exemplo em 14px (17.5px na letra grande): cabe inteiro a 360px
+   também com a letra grande (contas em design.md, 16.3). */
+.frase-linha .campo-controle::placeholder {
+  font-size: var(--fs-sm);
+}
+
+.botao-criar {
+  min-height: 48px;                         /* mesma altura do campo */
+  border-radius: var(--raio-md);            /* cantos de campo: uma peça só */
+}
+
+/* A partir de 480px: lado a lado, o campo estica e o botão fica à direita */
+@media (min-width: 480px) {
+  .frase-linha {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .frase-linha .campo-controle {
+    flex: 1 1 0;
+  }
+
+  .botao-criar {
+    flex: 0 0 auto;
+  }
+}
+
+/* --- Linha "Entendi" no formulário (o "canhoto do bilhete") ---
+   Só aparece quando o formulário abriu pela frase. Sem aria-live. */
+.entendi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+  margin-top: calc(-1 * var(--esp-1));      /* encosta no título da janela */
+  padding: var(--esp-3) var(--esp-4) var(--esp-3) var(--esp-3);
+  background: color-mix(in srgb, var(--cor-ambar) 8%, var(--cor-superficie));
+  border-left: 4px solid var(--cor-ambar);  /* enfeite: o texto diz tudo */
+  border-radius: var(--raio-md);
+  overflow-wrap: anywhere;                  /* título longo ou sem espaço quebra */
+}
+
+.entendi-linha {
+  font-size: var(--fs-base);
+  line-height: 1.5;
+}
+
+.entendi-rotulo {
+  font-weight: 700;
+  color: var(--cor-ambar);                  /* 9.0:1 escuro · 6.0:1 claro */
+}
+
+.entendi-valor {
+  font-weight: 600;
+}
+
+/* A hora com a cara da placa: mono, âmbar, números de largura fixa */
+.entendi-valor--hora {
+  font-family: var(--fonte-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cor-ambar);
+}
+
+/* "Ainda sem data" e "data a escolher": o lilás do "sem data" da Agenda */
+.entendi-valor--sem-data {
+  color: var(--cor-lilas);                  /* 7.8:1 escuro · 6.7:1 claro */
+}
+
+.entendi-sep {
+  color: var(--cor-texto-suave);
+}
+
+/* Nota: "Não encontrei data nem hora..." ou "A data 31/02 não existe..." */
+.entendi-nota {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-2);
+  padding-top: var(--esp-2);
+  font-size: var(--fs-sm);
+  border-top: 1px dashed color-mix(in srgb, var(--cor-ambar) 40%, transparent);   /* enfeite */
+}
+
+.entendi-nota .icone {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  color: var(--cor-ambar);
+}
+
+
+/* ---------------------------------------------------------
    13. MOVIMENTO REDUZIDO
    --------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
@@ -2481,5 +2622,15 @@ textarea.campo-controle {
   :root[data-tema="claro"] .botao-aparencia--tema .aparencia-chave::after,
   :root[data-letra="grande"] .botao-aparencia--letra .aparencia-chave::after {
     background: HighlightText;
+  }
+
+  /* Etapa 4a */
+  .frase,
+  .entendi {
+    border: 1px solid CanvasText;
+  }
+
+  .entendi {
+    border-left-width: 4px;
   }
 }

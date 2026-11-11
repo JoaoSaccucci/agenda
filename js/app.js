@@ -14,7 +14,9 @@
    Etapa 3b: faixa "Próximos 7 dias" (seção 5c) e os botões
    "Tema claro" e "Letra grande" (seção 12b).
    Etapa 4a: campo "Criar por frase" e a linha "Entendi" no
-   formulário (seção 8c). Quem entende a frase é o frase.js.
+   formulário (seção 8d). Quem entende a frase é o frase.js.
+   Entrega 4b: a frase também preenche a hora de fim, o tempo para
+   sair, o local e o "O que levar" (seção 8d).
 
    Regra de segurança (US01): tudo o que a pessoa digita entra
    na página com textContent, NUNCA com innerHTML. Assim um
@@ -182,6 +184,7 @@ const entendi = document.getElementById("entendi");
 const entendiLinha = document.getElementById("entendi-linha");
 const entendiNota = document.getElementById("entendi-nota");
 const entendiNotaTexto = document.getElementById("entendi-nota-texto");
+const entendiNotaItens = document.getElementById("entendi-nota-itens");   // Entrega 4b (US31)
 
 
 /* ---------------------------------------------------------
@@ -1320,15 +1323,14 @@ function abrirFormulario(compromisso, botao, modo, rascunho) {
 
   // showModal(): abre por cima da página; Esc fecha e o Tab fica preso dentro.
   janelaCompromisso.showModal();
-  // Etapa 4a (US27): frase só com data e hora -> título vazio, com o erro
-  // "Digite um título." já visível. O foco vai para o Título logo abaixo
-  // (é o primeiro campo com erro, US03).
-  if (rascunho && campoTitulo.value === "") mostrarErro(campoTitulo, erroTitulo);
+  // Etapas 4a e 4b: aberto pela frase, os erros já aparecem ao abrir e o
+  // foco vai para o primeiro campo com erro (US03, design 17.6.1).
+  const campoComErro = rascunho ? mostrarErrosDoRascunho() : null;
   // Remarcar e Agendar: a pessoa veio mudar a data, então o foco vai para ela.
   if (modo === "remarcar" || modo === "agendar") {
     campoData.focus();
   } else {
-    campoTitulo.focus();
+    (campoComErro || campoTitulo).focus();
   }
 }
 
@@ -1644,15 +1646,23 @@ function aoMudarHora() {
   }
 }
 
+/* Põe uma duração na lista de escolha, sem o "acender" (ao abrir o
+   formulário): null = "Sem hora de fim"; 30, 60 ou 120 = a opção;
+   outro número = "Outro" com os minutos (mesmo fora do limite). */
+function marcarDuracao(minutos) {
+  let valor = "";
+  if (minutos !== null) {
+    valor = OPCOES_DE_DURACAO.includes(String(minutos)) ? String(minutos) : "outro";
+  }
+  campoDuracao.value = valor;
+  campoDuracaoMin.value = valor === "outro" ? String(minutos) : "";
+}
+
 /* Mostra no formulário a duração de um compromisso salvo (ao editar). */
 function mostrarDuracaoNoFormulario(hora, duracaoMin) {
-  campoDuracao.value = "";
-  campoDuracaoMin.value = "";
   campoFim.value = "";
+  marcarDuracao(hora === null ? null : duracaoMin);
   if (hora === null || duracaoMin === null) return;
-  const valor = OPCOES_DE_DURACAO.includes(String(duracaoMin)) ? String(duracaoMin) : "outro";
-  campoDuracao.value = valor;
-  if (valor === "outro") campoDuracaoMin.value = String(duracaoMin);
   campoFim.value = horaDosMinutos(minutosDoDia(hora) + duracaoMin);
 }
 
@@ -1767,20 +1777,26 @@ function removerItem(indice) {
 
 
 /* ---------------------------------------------------------
-   8d. ETAPA 4a: CRIAR POR FRASE E A LINHA "ENTENDI" (US24 a US28)
+   8d. ETAPAS 4a E 4b: CRIAR POR FRASE E A LINHA "ENTENDI" (US24 a US32)
    O frase.js entende a frase; aqui só preenchemos o formulário
    (o rascunho) e montamos a linha "Entendi". Nada é salvo até
    a pessoa apertar "Salvar".
    --------------------------------------------------------- */
 
-// Classe de cor de cada tipo de parte da linha (design, seção 16.5).
+// Classe de cor de cada tipo de parte da linha (design, seções 16.5 e
+// 17.3.1): as partes de tempo (hora, fim e sair) ficam em mono âmbar.
 const CLASSE_DA_PARTE = {
   "hora": "entendi-valor--hora",
+  "fim": "entendi-valor--hora",
+  "sair": "entendi-valor--hora",
   "sem-data": "entendi-valor--sem-data"
 };
 
-/* Preenche Título, Data, Hora e "Ainda sem data" com o que a frase
-   disse. O resto do formulário fica como no "Novo compromisso". */
+/* Preenche o formulário com o que a frase disse: Título, Data, Hora,
+   "Ainda sem data" e, na 4b, hora de fim, tempo para sair, local e
+   "O que levar". O resto fica como no "Novo compromisso". Tudo entra
+   como se a pessoa tivesse preenchido à mão (design 17.6), mesmo um
+   valor fora do limite: o erro aparece ao abrir (mostrarErrosDoRascunho). */
 function preencherRascunho(resultado) {
   campoTitulo.value = resultado.titulo;
   campoSemData.checked = resultado.semData;
@@ -1788,6 +1804,61 @@ function preencherRascunho(resultado) {
   // sozinhos por outra data); "Escolha uma data." só aparece ao salvar.
   campoData.value = resultado.data || "";
   campoHora.value = resultado.hora || "";
+  campoLocal.value = resultado.local || "";
+  marcarOpcaoDeSaida(resultado.antecedenciaMin);   // null = "Nenhum"
+  preencherFimDaFrase(resultado);
+  // Os itens entram com feito: false, como se fossem "Adicionar". Sem
+  // anunciar no #itens-aviso: senão o leitor de tela leria "RG
+  // adicionado..." por cima da linha "Entendi" (design 17.5).
+  itensDoFormulario = resultado.itens.map(function (texto) {
+    return { texto: texto, feito: false };
+  });
+}
+
+/* Hora de fim vinda da frase (US29), com as regras da US19:
+   - intervalo: "Termina às" com o segundo horário e a Duração com a
+     diferença; fim igual ou antes da hora -> Duração "Sem hora de fim";
+   - duração: a opção (ou "Outro" com os minutos) e "Termina às"
+     calculado; se a duração não vale ou passa de 23:59, fica vazio. */
+function preencherFimDaFrase(resultado) {
+  if (!resultado.hora) return;
+  const inicio = minutosDoDia(resultado.hora);
+  if (resultado.fim) {
+    const fim = minutosDoDia(resultado.fim);
+    campoFim.value = resultado.fim;
+    marcarDuracao(fim > inicio ? fim - inicio : null);
+  } else if (resultado.duracaoMin !== null) {
+    const fim = inicio + resultado.duracaoMin;
+    marcarDuracao(resultado.duracaoMin);
+    campoFim.value = duracaoValida(resultado.duracaoMin) && fim <= ULTIMO_MINUTO_DO_DIA ? horaDosMinutos(fim) : "";
+  }
+}
+
+/* Aberto pela frase: mostra JÁ os erros dos campos que vieram com
+   problema (US03 e design 17.6.1) e devolve o primeiro campo com erro,
+   na ordem do formulário (Título, Termina às, Duração, Minutos da
+   duração, Minutos antes), ou null. "Escolha uma data." continua só
+   ao salvar. Roda depois do atualizarCamposDependentes. */
+function mostrarErrosDoRascunho() {
+  const comErro = [];
+  if (campoTitulo.value === "") {
+    mostrarErro(campoTitulo, erroTitulo);
+    comErro.push(campoTitulo);
+  }
+  // A hora de fim tem no máximo um problema por vez (avaliarHoraDeFim).
+  const fim = avaliarHoraDeFim();
+  const camposDoFim = { fim: [campoFim, erroFim], duracao: [campoDuracao, erroDuracao], minutos: [campoDuracaoMin, erroDuracaoMin] };
+  if (fim.erro) {
+    mostrarErro(camposDoFim[fim.erro][0], camposDoFim[fim.erro][1]);
+    comErro.push(camposDoFim[fim.erro][0]);
+  }
+  // "Minutos antes" só vale com hora e com "Outro" marcado (US12).
+  const usaMinutos = !grupoSair.disabled && opcaoDeSaidaMarcada() === "outro";
+  if (usaMinutos && minutosDigitados() === null) {
+    mostrarErro(campoMinutos, erroMinutos);
+    comErro.push(campoMinutos);
+  }
+  return comErro[0] || null;
 }
 
 /* Mostra a tira "Entendi" (aberto pela frase) ou a esconde (qualquer
@@ -1795,6 +1866,9 @@ function preencherRascunho(resultado) {
    aria-describedby quando ela aparece: assim o leitor de tela lê a
    linha uma vez, ao abrir, logo depois do título da janela. */
 function prepararEntendi(rascunho) {
+  // 4b (US31): o aviso de mais de 20 itens é ligado ou desligado em TODA
+  // abertura, para não sobrar de uma frase antiga (design 17.4).
+  entendiNotaItens.hidden = !(rascunho && rascunho.resultado.itensDeFora > 0);
   if (!rascunho) {
     entendi.hidden = true;
     entendiLinha.replaceChildren();
@@ -1822,8 +1896,10 @@ function prepararEntendi(rascunho) {
   janelaCompromisso.setAttribute("aria-describedby", "entendi");
 }
 
-/* Monta "Entendi: Amanhã · 10:00 · título 'Dentista'" só com
-   createElement e textContent: o título vem da frase e nunca vira HTML.
+/* Monta "Entendi: Amanhã · 10:00 · até 11:00 · título 'Dentista'" só
+   com createElement e textContent: o título, o local e os itens vêm
+   da frase e nunca viram HTML. Cada parte vem do partesDoEntendi
+   (frase.js): { tipo, antes, texto, depois } ou a parte "levar".
    O "·" fica escondido do leitor de tela (aria-hidden) e, no lugar dele,
    uma vírgula só para o leitor (sr-only) dá a pausa sem ler "ponto". */
 function montarLinhaEntendi(partes) {
@@ -1835,17 +1911,36 @@ function montarLinhaEntendi(partes) {
       separador.setAttribute("aria-hidden", "true");
       entendiLinha.append(criarElemento("span", "sr-only", ","), separador);
     }
-    const classe = "entendi-valor" + (CLASSE_DA_PARTE[parte.tipo] ? " " + CLASSE_DA_PARTE[parte.tipo] : "");
-    const valor = criarElemento("span", classe, parte.texto);
-    if (parte.tipo === "titulo") {
-      entendiLinha.append("título '", valor, "'");   // texto puro (append com texto = nó de texto)
-    } else {
-      entendiLinha.append(valor);
+    if (parte.tipo === "levar") {
+      montarParteLevar(parte);
+      return;   // dentro do forEach: pula para a próxima parte
     }
+    const classe = "entendi-valor" + (CLASSE_DA_PARTE[parte.tipo] ? " " + CLASSE_DA_PARTE[parte.tipo] : "");
+    // "antes" e "depois" são texto comum ("até ", "título '", "'"):
+    // append com texto = nó de texto puro (nunca HTML).
+    if (parte.antes) entendiLinha.append(parte.antes);
+    entendiLinha.append(criarElemento("span", classe, parte.texto));
+    if (parte.depois) entendiLinha.append(parte.depois);
   });
 
   // Ponto escondido no fim: pausa antes da nota, no leitor de tela.
   entendiLinha.append(criarElemento("span", "sr-only", "."));
+}
+
+/* 4b (US31): a parte "levar 'RG', 'cartão'" da linha. parte.itens são
+   os itens que aparecem (todos até 4; senão, os 3 primeiros) e
+   parte.resto, quantos ficaram em "e mais N itens" (design 17.3.3). */
+function montarParteLevar(parte) {
+  entendiLinha.append("levar" + NBSP);   // NBSP (frase.js): "levar '" não se parte
+  parte.itens.forEach(function (item, i) {
+    if (i > 0) entendiLinha.append(", ");
+    entendiLinha.append("'", criarElemento("span", "entendi-valor", item), "'");
+  });
+  if (parte.resto > 0) {
+    // textoDoResto (frase.js) = " e mais 17 itens". O espaço comum antes
+    // do "e" fica fora do span: é onde a linha pode quebrar.
+    entendiLinha.append(" ", criarElemento("span", "entendi-mais", textoDoResto(parte.resto).slice(1)));
+  }
 }
 
 /* "Criar" ou Enter no campo da frase. Campo vazio (ou só espaços):

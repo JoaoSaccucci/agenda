@@ -1,11 +1,13 @@
 /* =========================================================
    Agenda - frase.js
-   Etapa 4a (US24 a US28): "Criar por frase".
+   Etapa 4a (US24 a US28) e Entrega 4b (US29 a US32): "Criar por frase".
 
-   Lê uma frase como "dentista amanhã às 10h" e devolve o que
-   foi entendido: título, data e hora. Não mexe na tela nem no
-   localStorage (como o datas.js): só recebe a frase e o "agora"
-   e devolve um objeto. Por isso dá para conferir no console:
+   Lê uma frase como "dentista amanhã das 10h às 11h na clínica levar RG"
+   e devolve o que foi entendido: título, data, hora, hora de fim
+   (intervalo ou duração), tempo para sair, local e os itens do
+   "O que levar". Não mexe na tela nem no localStorage (como o
+   datas.js): só recebe a frase e o "agora" e devolve um objeto.
+   Por isso dá para conferir no console:
 
      entenderFrase("dentista amanhã às 10h", new Date(2026, 10, 12, 14, 0))
      -> { titulo: "Dentista", data: "2026-11-13", hora: "10:00", ... }
@@ -14,7 +16,10 @@
    sem biblioteca e sem internet. As regras estão nos requisitos,
    seção 3, "Captura rápida (Etapa 4)".
 
-   Usa funções de datas.js (carregado antes deste arquivo).
+   Usa funções de datas.js (carregado antes deste arquivo) e os
+   limites do checklist de armazenamento.js (MAXIMO_DE_ITENS e
+   MAXIMO_DO_TEXTO_DO_ITEM), que só são lidos quando a frase é
+   entendida, e não quando este arquivo carrega.
    ========================================================= */
 
 
@@ -62,8 +67,12 @@ function pularEspacos(texto, posicao) {
 }
 
 // Fim de palavra: depois do pedaço não pode vir letra nem número, nem
-// "/número" ou ":número" (assim "15/11/27" não vira "15/11" + resto).
+// "/número" ou ":número" (assim "15/11/2" não vira "15/11" + resto).
 const FIM_DE_PALAVRA = "(?![a-z0-9]|[/:]\\d)";
+
+// Espaço inseparável: "até 11:00" e "sair 30 min antes" nunca se partem
+// no meio na linha "Entendi" (design, 17.3.1).
+const NBSP = " ";
 
 
 /* ---------------------------------------------------------
@@ -78,8 +87,13 @@ const LIGACOES_DE_DATA = [
   "no", "na", "em", "para", "pra", "ate"
 ];
 
+// Correção da 4a (aprovada para a 4b): antes de "ter" e "dom" só contam
+// estas ligações. Assim "para ter aula" não vira terça.
+const LIGACOES_DE_TER_E_DOM = ["na proxima", "no proximo", "nesta", "neste", "proxima", "proximo", "no", "na"];
+
 // Uma expressão só para todas as datas. Os grupos (os parênteses) dizem
 // qual forma foi achada. "y" (sticky) = só procura NA posição pedida.
+// O ano é lido com 1 a 4 algarismos; quem decide se ele vale é o anoDaFrase.
 const EXPRESSAO_DATA = new RegExp(
   "(?:(" + LIGACOES_DE_DATA.join("|") + ")\\s+)?" +                // 1: ligação
   "(?:" +
@@ -87,8 +101,8 @@ const EXPRESSAO_DATA = new RegExp(
     "|(segunda|terca|quarta|quinta|sexta)(?:[-\\s]feira)?" +         // 3: dia útil por extenso
     "|(sabado|domingo)" +                                            // 4: fim de semana por extenso
     "|(seg|ter|qua|qui|sex|sab|dom)\\.?" +                           // 5: abreviado (com ou sem ponto)
-    "|dia\\s+(\\d{1,2})(?:/(\\d{1,2})(?:/(\\d{4}))?)?" +             // 6, 7, 8: "dia 15" ou "dia 15/11"
-    "|(\\d{1,2})/(\\d{1,2})(?:/(\\d{4}))?" +                         // 9, 10, 11: "15/11" ou "15/11/2027"
+    "|dia\\s+(\\d{1,2})(?:/(\\d{1,2})(?:/(\\d{1,4}))?)?" +            // 6, 7, 8: "dia 15" ou "dia 15/11"
+    "|(\\d{1,2})/(\\d{1,2})(?:/(\\d{1,4}))?" +                        // 9, 10, 11: "15/11" ou "15/11/2027"
   ")" + FIM_DE_PALAVRA,
   "y"
 );
@@ -116,6 +130,15 @@ function textoDaData(ano, mes, dia) {
   return String(ano).padStart(4, "0") + "-" + doisDigitos(mes) + "-" + doisDigitos(dia);
 }
 
+/* O ano escrito na frase -> número. "27" vira 2027 (20AA); "2027" fica
+   como está. Ano com 1 ou 3 algarismos ("202"), ou com 4 e menor que
+   1000 ("0050"), devolve null: a data não existe (com o aviso). */
+function anoDaFrase(textoAno) {
+  if (textoAno.length === 2) return 2000 + Number(textoAno);
+  const ano = Number(textoAno);
+  return textoAno.length === 4 && ano >= 1000 ? ano : null;
+}
+
 /* Procura uma data começando exatamente na posição. Devolve o pedaço
    ou null. "contexto" dá acesso à busca de horas (regra da D2). */
 function dataEm(contexto, posicao) {
@@ -132,9 +155,10 @@ function dataEm(contexto, posicao) {
   } else if (achado[3] || achado[4] || achado[5]) {
     const nome = achado[3] || achado[4] || achado[5];
     // D2: "ter" e "dom" também são palavras comuns ("ter aula"). Só contam
-    // com uma ligação antes ("na ter") ou com uma hora logo depois ("ter 10h").
-    if ((nome === "ter" || nome === "dom") && !achado[1]) {
-      if (!horaEm(contexto, pularEspacos(texto, peca.fim))) return null;
+    // com "na", "no", "nesta", "neste", "próxima" ou "próximo" antes
+    // ("na ter") ou com uma hora logo depois ("ter 10h", "ter das 9 às 10").
+    if ((nome === "ter" || nome === "dom") && !LIGACOES_DE_TER_E_DOM.includes(achado[1])) {
+      if (!horaOuIntervaloEm(contexto, pularEspacos(texto, peca.fim))) return null;
     }
     peca.forma = "semana";
     peca.diaDaSemana = NUMERO_DO_DIA[nome];
@@ -145,20 +169,24 @@ function dataEm(contexto, posicao) {
     peca.forma = "dia";
     peca.dia = dia;
   } else {
-    // "15/11", "15/11/2027" (com ou sem "dia" antes).
+    // "15/11", "15/11/2027", "15/11/27" (com ou sem "dia" antes).
     const dia = Number(achado[6] || achado[9]);
     const mes = Number(achado[7] || achado[10]);
     const textoAno = achado[8] || achado[11];
     peca.forma = "dia-mes";
     peca.dia = dia;
     peca.mes = mes;
-    peca.ano = textoAno ? Number(textoAno) : null;
+    peca.ano = textoAno ? anoDaFrase(textoAno) : null;
     // A data como foi digitada, para o aviso "A data 31/02 não existe."
     // (os algarismos são iguais na frase original e na preparada).
     peca.digitada = (achado[6] || achado[9]) + "/" + (achado[7] || achado[10]) + (textoAno ? "/" + textoAno : "");
-    // Sem ano, vale o maior mês possível (fevereiro com 29): "29/02" existe.
-    const ultimoDia = mes >= 1 && mes <= 12 ? diasNoMes(peca.ano !== null ? peca.ano : 2000, mes) : 0;
-    peca.existe = dia >= 1 && dia <= ultimoDia;
+    if (textoAno && peca.ano === null) {
+      peca.existe = false;   // ano "202" ou "0050": não existe (o "0050" virava 1950)
+    } else {
+      // Sem ano, vale o maior mês possível (fevereiro com 29): "29/02" existe.
+      const ultimoDia = mes >= 1 && mes <= 12 ? diasNoMes(peca.ano !== null ? peca.ano : 2000, mes) : 0;
+      peca.existe = dia >= 1 && dia <= ultimoDia;
+    }
   }
   return peca;
 }
@@ -223,8 +251,9 @@ function resolverData(peca, hora, agora) {
    --------------------------------------------------------- */
 
 // Palavras que, logo depois de "às 10", confirmam que é hora (regra da
-// palavra seguinte, requisitos, seção 3).
-const PALAVRAS_DEPOIS_DA_HORA = ["e", "no", "na", "em", "com", "para", "pra", "ate"];
+// palavra seguinte, requisitos, seção 3). "levar" (4b) também conta: é
+// o começo de outro pedaço reconhecido ("às 10 levar RG").
+const PALAVRAS_DEPOIS_DA_HORA = ["e", "no", "na", "em", "com", "para", "pra", "ate", "levar"];
 
 // Pontuação logo depois de "às 10" também confirma a hora.
 const PONTUACAO = /[.,;:!?…()\[\]"'“”‘’\-–—]/;
@@ -239,6 +268,34 @@ function horaComPeriodo(horas, periodo) {
   if (periodo === "noite" && horas >= 6 && horas <= 11) return horas + 12;
   if ((periodo === "tarde" || periodo === "noite") && horas >= 13 && horas <= 23) return horas;
   return null;
+}
+
+/* Lê um número de hora na posição: "10", "10h", "10h30" ou "10:30".
+   Hora de 0 a 23, minutos sempre com 2 algarismos (00 a 59).
+   Devolve { horas, minutos, sozinho, fim } ou null.
+   sozinho = true quando não tem "h" nem ":" (ex.: "10"). */
+function lerNumeroDeHora(texto, posicao) {
+  const numero = new RegExp("(\\d{1,2})(?:h([0-5]\\d)?|:([0-5]\\d))?" + FIM_DE_PALAVRA, "y");
+  numero.lastIndex = posicao;
+  const achado = numero.exec(texto);
+  if (!achado) return null;
+  const horas = Number(achado[1]);
+  if (horas > 23) return null;                     // "25h" não é hora
+  return {
+    horas: horas,
+    minutos: Number(achado[2] || achado[3] || 0),
+    sozinho: !/[h:]/.test(achado[0]),
+    fim: numero.lastIndex
+  };
+}
+
+/* "da manhã", "da tarde" ou "da noite" logo depois da posição.
+   Devolve { periodo: "manha" | "tarde" | "noite", fim } ou null. */
+function lerPeriodo(texto, posicao) {
+  const periodo = /\s+da\s+(manha|tarde|noite)(?![a-z0-9])/y;
+  periodo.lastIndex = posicao;
+  const achado = periodo.exec(texto);
+  return achado ? { periodo: achado[1], fim: periodo.lastIndex } : null;
 }
 
 /* Regra da palavra seguinte para "às N" (sem "h", ":" ou "horas"):
@@ -283,29 +340,18 @@ function horaEm(contexto, posicao) {
   }
 
   // Número, com "h" (e minutos), com ":" e minutos, ou sozinho.
-  // Minutos sempre com 2 algarismos, de 00 a 59.
-  const numero = new RegExp("(\\d{1,2})(?:h([0-5]\\d)?|:([0-5]\\d))?" + FIM_DE_PALAVRA, "y");
-  numero.lastIndex = inicio;
-  const achouNumero = numero.exec(texto);
-  if (!achouNumero) return null;
-
-  const horas = Number(achouNumero[1]);
-  const minutos = Number(achouNumero[2] || achouNumero[3] || 0);
-  const sozinho = !/[h:]/.test(achouNumero[0]);   // "10" (sem "h" e sem ":")
-  let fim = numero.lastIndex;
-  if (horas > 23) return null;                     // "25h" não é hora
+  const numero = lerNumeroDeHora(texto, inicio);
+  if (!numero) return null;
 
   // "da manhã", "da tarde", "da noite" logo depois (tabela de conversão).
-  const periodo = /\s+da\s+(manha|tarde|noite)(?![a-z0-9])/y;
-  periodo.lastIndex = fim;
-  const achouPeriodo = periodo.exec(texto);
-  if (achouPeriodo) {
-    const convertida = horaComPeriodo(horas, achouPeriodo[1]);
-    if (convertida !== null) return peca(periodo.lastIndex, convertida, minutos);
+  const periodo = lerPeriodo(texto, numero.fim);
+  if (periodo) {
+    const convertida = horaComPeriodo(numero.horas, periodo.periodo);
+    if (convertida !== null) return peca(periodo.fim, convertida, numero.minutos);
   }
 
   // Com "h" ou ":", é hora (com ou sem ligação antes).
-  if (!sozinho) return peca(fim, horas, minutos);
+  if (!numero.sozinho) return peca(numero.fim, numero.horas, numero.minutos);
 
   // Número sozinho: só é hora depois de "às"/"as" ("um número sozinho
   // nunca vira hora").
@@ -313,34 +359,166 @@ function horaEm(contexto, posicao) {
 
   // "às 10 horas" (ou "hora"): a palavra sai junto e é hora com certeza.
   const palavraHoras = /\s+horas?(?![a-z0-9])/y;
-  palavraHoras.lastIndex = fim;
-  if (palavraHoras.exec(texto)) return peca(palavraHoras.lastIndex, horas, 0);
+  palavraHoras.lastIndex = numero.fim;
+  if (palavraHoras.exec(texto)) return peca(palavraHoras.lastIndex, numero.horas, 0);
 
   // "às 10" sozinho: regra da palavra seguinte.
-  if (!horaConfirmadaDepois(contexto, fim)) return null;
-  return peca(fim, horas, 0);
+  if (!horaConfirmadaDepois(contexto, numero.fim)) return null;
+  return peca(numero.fim, numero.horas, 0);
 }
 
 
 /* ---------------------------------------------------------
-   4. ACHAR OS PEDAÇOS DA FRASE
+   4. PEDAÇOS COMPOSTOS DA 4b (US29 e US30)
+   "das 10 às 11" (intervalo), "por 1h30" (duração) e
+   "sair 30 min antes". Dentro deles, os números são lidos uma
+   vez só: o "1h30" de "sair 1h30 antes" não vira hora.
    --------------------------------------------------------- */
 
-/* O pedaço (data ou hora) que começa na posição, ou null. Na mesma
-   posição vale o mais comprido. O resultado de cada posição é guardado
-   em contexto.memoria: as regras "hora logo depois" e "outro pedaço
-   reconhecido" olham para a frente e pedem a mesma posição várias vezes. */
+/* Intervalo: "das" + horário + "às"/"até"/"até as" + horário, com
+   "da manhã/tarde/noite" opcional. Dentro dele os números são horas
+   mesmo sem "h" ("das 10 às 11"). Devolve
+   { tipo: "intervalo", inicio, fim, hora: "HH:MM", horaFim: "HH:MM" } ou null. */
+function intervaloEm(texto, posicao) {
+  const das = /das\s+/y;
+  das.lastIndex = posicao;
+  if (!das.exec(texto)) return null;
+
+  const primeiro = lerNumeroDeHora(texto, das.lastIndex);
+  if (!primeiro) return null;
+  let horaInicio = primeiro.horas;
+  let fim = primeiro.fim;
+  // Trechos de dentro do intervalo que NÃO saem do título (veja tirarPecas).
+  const manter = [];
+  // O primeiro horário pode ter o seu próprio "da manhã/tarde/noite".
+  // Fora da tabela ("das 2 da noite às 4"), o período é ignorado: o
+  // intervalo vale com as horas e "da noite" fica no título (mesma
+  // regra do segundo horário, abaixo).
+  const periodo1 = lerPeriodo(texto, fim);
+  if (periodo1) {
+    const convertida = horaComPeriodo(primeiro.horas, periodo1.periodo);
+    if (convertida !== null) horaInicio = convertida;
+    else manter.push({ inicio: fim, fim: periodo1.fim });
+    fim = periodo1.fim;
+  }
+
+  const ligacao = /\s+(?:ate\s+as|ate|as)\s+/y;
+  ligacao.lastIndex = fim;
+  if (!ligacao.exec(texto)) return null;
+
+  const segundo = lerNumeroDeHora(texto, ligacao.lastIndex);
+  if (!segundo) return null;
+  let horaFim = segundo.horas;
+  fim = segundo.fim;
+
+  // "da tarde" depois do segundo horário vale para ele e também para o
+  // primeiro, se o primeiro não tiver o seu e for menor ou igual ao
+  // segundo ("das 2 às 4 da tarde" -> 14 às 16; "das 11 às 1 da tarde"
+  // -> 11 às 13). Fora da tabela, o "da ..." fica no título.
+  const periodo2 = lerPeriodo(texto, fim);
+  if (periodo2 && horaComPeriodo(segundo.horas, periodo2.periodo) !== null) {
+    horaFim = horaComPeriodo(segundo.horas, periodo2.periodo);
+    fim = periodo2.fim;
+    const primeiroAntes = primeiro.horas * 60 + primeiro.minutos <= segundo.horas * 60 + segundo.minutos;
+    if (!periodo1 && primeiroAntes) {
+      const convertida = horaComPeriodo(primeiro.horas, periodo2.periodo);
+      if (convertida !== null) horaInicio = convertida;
+    }
+  }
+
+  return {
+    tipo: "intervalo",
+    inicio: posicao,
+    fim: fim,
+    manter: manter,
+    hora: doisDigitos(horaInicio) + ":" + doisDigitos(primeiro.minutos),
+    horaFim: doisDigitos(horaFim) + ":" + doisDigitos(segundo.minutos)
+  };
+}
+
+/* Um tempo em minutos: "30 min", "45 minutos", "1h", "1h30", "1 hora",
+   "2 horas" ou "meia hora". Devolve { minutos, fim } ou null.
+   Pode passar dos limites (ex.: "13h" = 780): quem decide o erro é o
+   formulário, que mostra a mensagem de sempre. */
+function lerTempo(texto, posicao) {
+  const meiaHora = /meia\s+hora(?![a-z0-9])/y;
+  meiaHora.lastIndex = posicao;
+  if (meiaHora.exec(texto)) return { minutos: 30, fim: meiaHora.lastIndex };
+
+  // "1h", "1h30" (e "1h30min").
+  const comH = new RegExp("(\\d{1,3})h(?:([0-5]\\d)(?:min)?)?" + FIM_DE_PALAVRA, "y");
+  comH.lastIndex = posicao;
+  const achouH = comH.exec(texto);
+  if (achouH) return { minutos: Number(achouH[1]) * 60 + Number(achouH[2] || 0), fim: comH.lastIndex };
+
+  // "1 hora", "2 horas", "45 min", "90 minutos" (com ou sem espaço).
+  const comPalavra = /(\d{1,4})\s*(horas?|minutos?|min)(?![a-z0-9])/y;
+  comPalavra.lastIndex = posicao;
+  const achouPalavra = comPalavra.exec(texto);
+  if (achouPalavra) {
+    const vezes = achouPalavra[2].startsWith("hora") ? 60 : 1;
+    return { minutos: Number(achouPalavra[1]) * vezes, fim: comPalavra.lastIndex };
+  }
+  return null;
+}
+
+/* Duração: "por" ou "durante" + tempo ("por 1h30", "durante 3 horas").
+   Devolve { tipo: "duracao", inicio, fim, minutos } ou null. */
+function duracaoEm(texto, posicao) {
+  const por = /(?:por|durante)\s+/y;
+  por.lastIndex = posicao;
+  if (!por.exec(texto)) return null;
+  const tempo = lerTempo(texto, por.lastIndex);
+  if (!tempo) return null;
+  return { tipo: "duracao", inicio: posicao, fim: tempo.fim, minutos: tempo.minutos };
+}
+
+/* Tempo para sair: "sair" + tempo + "antes" ("sair 30 min antes").
+   Devolve { tipo: "sair", inicio, fim, minutos } ou null. */
+function sairEm(texto, posicao) {
+  const sair = /sair\s+/y;
+  sair.lastIndex = posicao;
+  if (!sair.exec(texto)) return null;
+  const tempo = lerTempo(texto, sair.lastIndex);
+  if (!tempo) return null;
+  const antes = /\s+antes(?![a-z0-9])/y;
+  antes.lastIndex = tempo.fim;
+  if (!antes.exec(texto)) return null;
+  return { tipo: "sair", inicio: posicao, fim: antes.lastIndex, minutos: tempo.minutos };
+}
+
+/* Uma hora ou um intervalo na posição (para a regra D2 do "ter"/"dom"). */
+function horaOuIntervaloEm(contexto, posicao) {
+  if (!comecoDePalavra(contexto.texto, posicao)) return null;
+  return intervaloEm(contexto.texto, posicao) || horaEm(contexto, posicao);
+}
+
+
+/* ---------------------------------------------------------
+   5. ACHAR OS PEDAÇOS DA FRASE
+   --------------------------------------------------------- */
+
+/* O pedaço (data, hora, intervalo, duração ou "sair ... antes") que
+   começa na posição, ou null. Na mesma posição vale o mais comprido
+   (num empate, o que vem primeiro na lista: data antes de hora).
+   O resultado de cada posição é guardado em contexto.memoria: as regras
+   "hora logo depois" e "outro pedaço reconhecido" olham para a frente
+   e pedem a mesma posição várias vezes. */
 function pecaEm(contexto, posicao) {
   if (contexto.memoria.has(posicao)) return contexto.memoria.get(posicao);
   let achada = null;
   if (comecoDePalavra(contexto.texto, posicao)) {
-    const data = dataEm(contexto, posicao);
-    const hora = horaEm(contexto, posicao);
-    if (data && hora) {
-      achada = data.fim >= hora.fim ? data : hora;
-    } else {
-      achada = data || hora;
-    }
+    const texto = contexto.texto;
+    const candidatas = [
+      dataEm(contexto, posicao),
+      horaEm(contexto, posicao),
+      intervaloEm(texto, posicao),
+      duracaoEm(texto, posicao),
+      sairEm(texto, posicao)
+    ];
+    candidatas.forEach(function (peca) {
+      if (peca && (!achada || peca.fim > achada.fim)) achada = peca;
+    });
   }
   contexto.memoria.set(posicao, achada);
   return achada;
@@ -366,57 +544,131 @@ function acharPecas(texto) {
 
 
 /* ---------------------------------------------------------
-   5. TÍTULO (US27)
+   6. LIMPEZA DO TÍTULO, DO LOCAL E DOS ITENS (US27)
    --------------------------------------------------------- */
 
-// Sinais que saem do começo e do fim do título: espaços , . ; : - –
+// Sinais que saem do começo e do fim: espaços , . ; : - –
 const PONTAS = /^[\s,.;:\-–]+|[\s,.;:\-–]+$/g;
 
-/* Limpa o que sobrou da frase (requisitos, seção 3, "Limpeza do título"):
-   espaços repetidos viram um; sai o espaço antes de , . ; :; saem das
-   pontas os sinais e um "e" solto (repetindo até não sobrar nenhum);
-   corta no limite; a primeira letra vira maiúscula. */
-function limparTitulo(texto, limite) {
-  let limpo = texto.replace(/\s+/g, " ").replace(/ ([,.;:])/g, "$1");
-
-  let antes;
-  do {
-    antes = limpo;
-    limpo = limpo.replace(PONTAS, "");
-    // "e" solto no começo ou no fim ("reunião e" -> "reunião").
-    limpo = limpo.replace(/^e(?=$|[\s,.;:\-–])/i, "").replace(/(^|[\s,.;:\-–])e$/i, "$1");
-  } while (limpo !== antes);
+/* Limpa um texto (requisitos, seção 3, "Limpeza"): espaços repetidos
+   viram um; sai o espaço antes de , . ; :; saem das pontas os sinais;
+   corta no limite; com "maiuscula", a primeira letra vira maiúscula.
+   O "e" solto não é tirado aqui: só sai o "e" colado a um pedaço
+   reconhecido (veja tirarPecas e textoDoPedacoLivre). */
+function limparTexto(texto, limite, maiuscula) {
+  let limpo = texto.replace(/\s+/g, " ").replace(/ ([,.;:])/g, "$1").replace(PONTAS, "");
 
   if (limpo.length > limite) {
     limpo = limpo.slice(0, limite);
     // Não deixa meio emoji no fim (um emoji ocupa 2 "letras" no JavaScript).
     if (/[\ud800-\udbff]$/.test(limpo)) limpo = limpo.slice(0, -1);
-    limpo = limpo.trimEnd();
+    limpo = limpo.replace(PONTAS, "");
   }
 
-  if (limpo !== "") {
+  if (maiuscula && limpo !== "") {
     const primeira = limpo[0].toUpperCase();
-    // Só troca se continuar uma letra só (o tamanho do título não muda).
+    // Só troca se continuar uma letra só (o tamanho do texto não muda).
     if (primeira.length === 1) limpo = primeira + limpo.slice(1);
   }
   return limpo;
 }
 
+// Um "e" MINÚSCULO no começo ou no fim de um trecho, com os espaços e a
+// pontuação em volta. Só o "e" minúsculo é ligação: o "E" maiúsculo é
+// sempre texto ("vitamina E", "ala E"). Decisão do João depois do teste da 4b.
+// O hífen e o travessão NUNCA contam como fim ou começo da palavra "e"
+// colados nela: "e-mail" e "pré-e" são palavras, não a ligação "e".
+// Por isso, logo depois do "e" só vale espaço, , . ; : ou o fim do trecho,
+// e logo antes dele só vale espaço, , . ; : ou o começo do trecho.
+const E_NO_COMECO = /^[\s,.;:\-–]*e(?=[\s,.;:]|$)/;
+const E_NO_FIM = /(^|[\s,.;:])e(?:[\s,.;:][\s,.;:\-–]*)?$/;
+
 /* A frase original sem os pedaços usados. Cada pedaço vira um espaço
-   (para as palavras dos lados não grudarem); a limpeza tira o excesso. */
+   (para as palavras dos lados não grudarem); a limpeza tira o excesso.
+   Um "e" minúsculo colado a um pedaço sai junto com ele: "reunião e
+   amanhã" e "reunião amanhã e" viram "Reunião". Um pedaço pode ter
+   trechos que ficam no título (peca.manter: o "da noite" ignorado de
+   "das 2 da noite às 4"). */
 function tirarPecas(frase, pecas) {
+  if (pecas.length === 0) return frase;
   let resultado = "";
   let posicao = 0;
-  pecas.forEach(function (peca) {
-    resultado += frase.slice(posicao, peca.inicio) + " ";
+  pecas.forEach(function (peca, i) {
+    let trecho = frase.slice(posicao, peca.inicio);
+    if (i > 0) trecho = trecho.replace(E_NO_COMECO, "");   // logo depois do pedaço anterior
+    trecho = trecho.replace(E_NO_FIM, "$1");                 // logo antes deste pedaço
+    const mantidos = (peca.manter || []).map(function (m) { return frase.slice(m.inicio, m.fim); });
+    resultado += trecho + " " + mantidos.join(" ") + " ";
     posicao = peca.fim;
   });
-  return resultado + frase.slice(posicao);
+  // O que sobra depois do último pedaço.
+  return resultado + frase.slice(posicao).replace(E_NO_COMECO, "");
 }
 
 
 /* ---------------------------------------------------------
-   6. A FUNÇÃO PRINCIPAL
+   7. LOCAL E "O QUE LEVAR" (US31 e US32)
+   Os pedaços de texto livre: "levar ..." e "no/na ...". Eles são
+   procurados por último, só fora dos outros pedaços, e vão até o
+   começo do próximo pedaço reconhecido ou até o fim da frase.
+   --------------------------------------------------------- */
+
+// Limite do local (US02, igual ao título).
+const LIMITE_DO_LOCAL = 100;
+
+/* Procura as palavras que abrem um pedaço livre: a primeira "levar" e
+   o primeiro "no"/"na" que estão FORA dos pedaços já achados e que não
+   estão no começo da frase ("Levar o carro na oficina" -> "Levar" fica
+   no título). Devolve { levar, local }, cada um { inicio, fimDaPalavra } ou null. */
+function acharPalavrasLivres(texto, pecas) {
+  const achadas = { levar: null, local: null };
+  const palavra = /[a-z0-9]+/g;
+  let achado;
+  while ((achado = palavra.exec(texto)) !== null) {
+    const inicio = achado.index;
+    const dentroDeUmPedaco = pecas.some(function (p) { return inicio >= p.inicio && inicio < p.fim; });
+    const noComeco = !LETRA_OU_NUMERO.test(texto.slice(0, inicio));
+    if (dentroDeUmPedaco || noComeco) continue;
+    const marca = { inicio: inicio, fimDaPalavra: palavra.lastIndex };
+    if (achado[0] === "levar" && !achadas.levar) achadas.levar = marca;
+    if ((achado[0] === "no" || achado[0] === "na") && !achadas.local) achadas.local = marca;
+  }
+  return achadas;
+}
+
+/* Onde termina um pedaço livre que começa em "inicio": no começo do
+   próximo pedaço reconhecido (ou da outra palavra livre, "outra"),
+   ou no fim da frase. */
+function fimDoPedacoLivre(inicio, pecas, outra, tamanho) {
+  let fim = tamanho;
+  pecas.forEach(function (p) { if (p.inicio > inicio && p.inicio < fim) fim = p.inicio; });
+  if (outra && outra.inicio > inicio && outra.inicio < fim) fim = outra.inicio;
+  return fim;
+}
+
+/* O texto de um pedaço livre (da frase original). Se ele terminou
+   colado num pedaço reconhecido, um "e" minúsculo no fim sai junto
+   ("na clínica e amanhã" -> "clínica"; "na ala E amanhã" -> "ala E"). */
+function textoDoPedacoLivre(frase, inicio, fim) {
+  let texto = frase.slice(inicio, fim);
+  if (fim < frase.length) texto = texto.replace(E_NO_FIM, "$1");
+  return texto;
+}
+
+/* Separa os itens do "levar": por vírgula, ponto e vírgula ou " e "
+   (só o "e" minúsculo: "levar vitamina E" é um item só, "vitamina E").
+   Cada item é limpo como o título (sem maiúscula) e cortado em 60.
+   Item vazio é ignorado. Os espaços em volta deixam achar um " e "
+   também nas pontas ("RG e" -> "RG"). */
+function separarItens(texto) {
+  return (" " + texto + " ").split(/[,;]|\se(?=\s)/)
+    .map(function (item) { return limparTexto(item, MAXIMO_DO_TEXTO_DO_ITEM, false); })
+    .filter(function (item) { return item !== ""; });
+}
+
+
+/* ---------------------------------------------------------
+   8. A FUNÇÃO PRINCIPAL
    --------------------------------------------------------- */
 
 // Limite do título (US02).
@@ -427,6 +679,15 @@ const LIMITE_DO_TITULO = 100;
    - titulo: texto limpo ("" = sem título);
    - data: "AAAA-MM-DD" ou null;
    - hora: "HH:MM" ou null (null = dia todo);
+   - fim: "HH:MM" do intervalo ("das 10h às 11h" -> "11:00") ou null.
+     Pode ser igual ou antes da hora: o formulário mostra o erro;
+   - duracaoMin: minutos da duração ("por 1h30" -> 90) ou null. Pode
+     estar fora do limite (0, mais de 1439, ou passar de 23:59);
+   - antecedenciaMin: minutos do "sair ... antes" ou null. Pode estar
+     fora de 1 a 720;
+   - local: texto do "no/na ..." (limpo, até 100 letras) ou null;
+   - itens: textos do "levar ..." (até 20, cada um até 60 letras);
+   - itensDeFora: quantos itens passaram de 20 e ficaram de fora;
    - semData: true = marcar "Ainda sem data" (sem data e sem hora);
    - dataInexistente: "31/02" (como foi digitada) quando a única data
      da frase não existe; senão null;
@@ -434,20 +695,31 @@ const LIMITE_DO_TITULO = 100;
      nem de hora (mostra a dica "Não encontrei data nem hora..."). */
 function entenderFrase(frase, agora) {
   const texto = String(frase);
-  const pecas = acharPecas(prepararFrase(texto));
+  const preparada = prepararFrase(texto);
+  const pecas = acharPecas(preparada);
 
   // Vale o primeiro de cada tipo. Data que não existe não "ocupa" a vez:
   // se houver outra data válida, vale ela (seção 3).
-  const pecaData = pecas.find(function (p) { return p.tipo === "data" && p.existe; }) || null;
-  const pecaInexistente = pecas.find(function (p) { return p.tipo === "data" && !p.existe; }) || null;
-  const pecaHora = pecas.find(function (p) { return p.tipo === "hora"; }) || null;
-
+  const primeira = function (teste) { return pecas.find(teste) || null; };
+  const pecaData = primeira(function (p) { return p.tipo === "data" && p.existe; });
+  const pecaInexistente = primeira(function (p) { return p.tipo === "data" && !p.existe; });
+  // O intervalo conta como o pedaço de hora: vale o primeiro dos dois.
+  const pecaHora = primeira(function (p) { return p.tipo === "hora" || p.tipo === "intervalo"; });
   const hora = pecaHora ? pecaHora.hora : null;
+
+  // Fim: se a hora veio de um intervalo, ele também é o fim (as durações
+  // ficam no título). Senão, a primeira duração, que só vale com hora.
+  // O "sair ... antes" também só vale com hora.
+  const intervalo = pecaHora && pecaHora.tipo === "intervalo" ? pecaHora : null;
+  const pecaDuracao = hora && !intervalo ? primeira(function (p) { return p.tipo === "duracao"; }) : null;
+  const pecaSair = hora ? primeira(function (p) { return p.tipo === "sair"; }) : null;
+
   let data = null;
   if (pecaData) {
     data = resolverData(pecaData, hora, agora);
   } else if (hora && !pecaInexistente) {
     // D1: hora sem data -> hoje, se ainda não passou; senão, amanhã.
+    // No intervalo, vale o primeiro horário.
     const hoje = dataParaTexto(agora);
     if (compromissoPassou({ data: hoje, hora: hora }, agora)) {
       data = dataParaTexto(new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() + 1));
@@ -456,27 +728,71 @@ function entenderFrase(frase, agora) {
     }
   }
 
-  // Só sai do título o que virou campo (a data inexistente fica).
-  const usadas = [pecaData, pecaHora].filter(Boolean).sort(function (a, b) { return a.inicio - b.inicio; });
+  // Pedaços livres: "levar ..." e "no/na ...". Cada um vai até o próximo
+  // pedaço reconhecido, e um termina onde o outro começa.
+  const palavras = acharPalavrasLivres(preparada, pecas);
+  const usadas = [pecaData, pecaHora, pecaDuracao, pecaSair].filter(Boolean);
+
+  let local = null;
+  if (palavras.local) {
+    const fim = fimDoPedacoLivre(palavras.local.inicio, pecas, palavras.levar, texto.length);
+    const limpo = limparTexto(textoDoPedacoLivre(texto, palavras.local.fimDaPalavra, fim), LIMITE_DO_LOCAL, true);
+    // "no"/"na" sem texto depois ("reunião na") fica no título.
+    if (limpo !== "") {
+      local = limpo;
+      usadas.push({ inicio: palavras.local.inicio, fim: fim });
+    }
+  }
+
+  let itens = [];
+  let itensDeFora = 0;
+  if (palavras.levar) {
+    const fim = fimDoPedacoLivre(palavras.levar.inicio, pecas, palavras.local, texto.length);
+    const todos = separarItens(textoDoPedacoLivre(texto, palavras.levar.fimDaPalavra, fim));
+    // "levar" sem nada depois fica no título.
+    if (todos.length > 0) {
+      itens = todos.slice(0, MAXIMO_DE_ITENS);
+      itensDeFora = todos.length - itens.length;
+      usadas.push({ inicio: palavras.levar.inicio, fim: fim });
+    }
+  }
+
+  // Só sai do título o que virou campo (o que não foi usado fica).
+  usadas.sort(function (a, b) { return a.inicio - b.inicio; });
 
   return {
-    titulo: limparTitulo(tirarPecas(texto, usadas), LIMITE_DO_TITULO),
+    titulo: limparTexto(tirarPecas(texto, usadas), LIMITE_DO_TITULO, true),
     data: data,
     hora: hora,
+    fim: intervalo ? intervalo.horaFim : null,
+    duracaoMin: pecaDuracao ? pecaDuracao.minutos : null,
+    antecedenciaMin: pecaSair ? pecaSair.minutos : null,
+    local: local,
+    itens: itens,
+    itensDeFora: itensDeFora,
     semData: !pecaData && !pecaInexistente && !pecaHora,
     dataInexistente: !pecaData && pecaInexistente ? pecaInexistente.digitada : null,
-    nadaEntendido: !pecas.some(function (p) { return p.tipo === "data" || p.tipo === "hora"; })
+    nadaEntendido: !pecas.some(function (p) { return p.tipo === "data" || p.tipo === "hora" || p.tipo === "intervalo"; })
   };
 }
 
 
 /* ---------------------------------------------------------
-   7. A LINHA "ENTENDI" (US28)
+   9. A LINHA "ENTENDI" (US28, e as partes novas da 4b)
    --------------------------------------------------------- */
 
-/* As partes da linha "Entendi", na ordem: data · hora · título.
-   Cada parte: { tipo, texto }. O app.js transforma em elementos
-   (com textContent) e escolhe a cor pelo tipo. */
+// Na linha, o "levar" mostra todos os itens até 4; com 5 ou mais, os 3
+// primeiros e "e mais N itens" (design, 17.3.3, decisão 1).
+const ITENS_NA_LINHA_SEM_RESUMO = 4;
+const ITENS_NA_LINHA_COM_RESUMO = 3;
+
+/* As partes da linha "Entendi", na ordem:
+   data · hora · fim · sair · local · levar · título.
+   Cada parte: { tipo, texto, antes, depois }. O app.js transforma em
+   elementos (com textContent) e escolhe a cor pelo tipo. "antes" e
+   "depois" são texto comum em volta do valor ("até " + "11:00").
+   A parte "levar" é diferente: { tipo: "levar", itens, resto }, com os
+   itens que aparecem e quantos ficaram resumidos em "e mais N itens". */
 function partesDoEntendi(resultado, agora) {
   const partes = [];
 
@@ -494,8 +810,30 @@ function partesDoEntendi(resultado, agora) {
     partes.push({ tipo: "dia-todo", texto: "Dia todo" });   // sem data, a hora não aparece
   }
 
+  // 4b: o valor aparece como foi entendido, mesmo com erro (decisão 4).
+  if (resultado.fim) {
+    partes.push({ tipo: "fim", antes: "até" + NBSP, texto: resultado.fim });
+  } else if (resultado.duracaoMin !== null) {
+    partes.push({ tipo: "fim", antes: "duração" + NBSP, texto: resultado.duracaoMin + NBSP + "min" });
+  }
+
+  if (resultado.antecedenciaMin !== null) {
+    partes.push({ tipo: "sair", antes: "sair" + NBSP, texto: resultado.antecedenciaMin + NBSP + "min", depois: NBSP + "antes" });
+  }
+
+  if (resultado.local) {
+    partes.push({ tipo: "local", antes: "local" + NBSP + "'", texto: resultado.local, depois: "'" });
+  }
+
+  if (resultado.itens.length > 0) {
+    const mostrar = resultado.itens.length <= ITENS_NA_LINHA_SEM_RESUMO
+      ? resultado.itens
+      : resultado.itens.slice(0, ITENS_NA_LINHA_COM_RESUMO);
+    partes.push({ tipo: "levar", itens: mostrar, resto: resultado.itens.length - mostrar.length });
+  }
+
   if (resultado.titulo) {
-    partes.push({ tipo: "titulo", texto: resultado.titulo });
+    partes.push({ tipo: "titulo", antes: "título '", texto: resultado.titulo, depois: "'" });
   } else {
     partes.push({ tipo: "sem-titulo", texto: "sem título" });
   }
@@ -512,10 +850,20 @@ function tituloDoDiaDaFrase(textoData, agora) {
   return DIAS_DA_SEMANA[data.getDay()] + ", " + doisDigitos(data.getDate()) + "/" + doisDigitos(data.getMonth() + 1);
 }
 
+/* O texto do fim da parte "levar": " e mais 17 itens". O espaço antes
+   do "e" é comum (a linha pode quebrar ali); os outros são inseparáveis. */
+function textoDoResto(resto) {
+  return " e" + NBSP + "mais" + NBSP + resto + NBSP + "itens";
+}
+
 /* A linha inteira em texto, como aparece na tela:
    "Entendi: Amanhã · 10:00 · título 'Dentista'". Útil no console. */
 function linhaDoEntendi(resultado, agora) {
   return "Entendi: " + partesDoEntendi(resultado, agora).map(function (parte) {
-    return parte.tipo === "titulo" ? "título '" + parte.texto + "'" : parte.texto;
+    if (parte.tipo === "levar") {
+      const lista = parte.itens.map(function (item) { return "'" + item + "'"; }).join(", ");
+      return "levar" + NBSP + lista + (parte.resto > 0 ? textoDoResto(parte.resto) : "");
+    }
+    return (parte.antes || "") + parte.texto + (parte.depois || "");
   }).join(" · ");
 }

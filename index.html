@@ -118,6 +118,22 @@
           <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
         </button>
       </div>
+      <!-- Entrega 4b: exemplos do que a frase entende. <details> abre e fecha
+           sem JavaScript (Enter, Espaço, clique ou toque) e começa fechado.
+           Os exemplos são só texto: não preenchem o campo. -->
+      <details class="frase-exemplos">
+        <summary class="frase-exemplos-botao">
+          Ver exemplos
+          <svg class="icone frase-exemplos-seta" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>
+        </summary>
+        <ul class="frase-exemplos-lista">
+          <li>dentista amanhã às 10h na clínica Sorriso</li>
+          <li>reunião sexta das 14h às 15h30</li>
+          <li>treino sábado 7h por 1h</li>
+          <li>consulta dia 20 9h sair 40 min antes</li>
+          <li>exame sexta 7h levar RG e pedido médico</li>
+        </ul>
+      </details>
     </form>
 
     <!-- Avisos que ficam na tela: primeiro os problemas com o localStorage,
@@ -212,6 +228,12 @@
         <p class="entendi-nota" id="entendi-nota" hidden>
           <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
           <span id="entendi-nota-texto"></span>
+        </p>
+        <!-- Entrega 4b (US31): só aparece quando a frase tinha mais de 20 itens
+             no "levar". Texto fixo: o JavaScript só tira e põe o hidden. -->
+        <p class="entendi-nota" id="entendi-nota-itens" hidden>
+          <svg class="icone" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>
+          <span>A lista 'O que levar' aceita até 20 itens. Os outros ficaram de fora.</span>
         </p>
       </div>
 

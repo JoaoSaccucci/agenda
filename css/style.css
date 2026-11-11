@@ -2500,6 +2500,76 @@ textarea.campo-controle {
 
 
 /* ---------------------------------------------------------
+   12g. ETAPA 4b: TIRA "ENTENDI" COMPLETA E "VER EXEMPLOS"
+   Decisões em: design.md, seção 17.
+   Só variáveis: vale nos dois temas e com a letra grande.
+   --------------------------------------------------------- */
+
+/* "e mais 17 itens" na tira: é contagem, não item */
+.entendi-mais {
+  color: var(--cor-texto-suave);            /* 7.1:1 escuro · 6.9:1 claro (fundo da tira) */
+}
+
+/* --- "Ver exemplos" no painel "Criar por frase" --- */
+.frase-exemplos-botao {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-1);
+  width: fit-content;
+  min-height: 44px;                         /* área de toque */
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--cor-lilas);                  /* a cor dos links: ≈8.6:1 escuro · 7.5:1 claro */
+  cursor: pointer;
+  list-style: none;                         /* tira o triângulo do navegador */
+  border-radius: var(--raio-md);
+}
+
+.frase-exemplos-botao::-webkit-details-marker {
+  display: none;                            /* Safari antigo */
+}
+
+.frase-exemplos-botao:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.frase-exemplos-seta {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--transicao);
+}
+
+.frase-exemplos[open] .frase-exemplos-seta {
+  transform: rotate(180deg);
+}
+
+/* "ul." na frente: o reset ul[class] (seção 2) é mais forte que uma classe
+   sozinha e tirava os marcadores e o recuo. */
+ul.frase-exemplos-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+  margin: 0 0 var(--esp-1);
+  padding-left: var(--esp-5);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  color: var(--cor-texto);
+  list-style: disc;
+}
+
+.frase-exemplos-lista li::marker {
+  color: var(--cor-lilas);
+}
+
+/* O gap da .frase já dá 8px entre a linha do campo e o "Ver exemplos".
+   A linha do summary tem 44px; puxamos 4px para o painel não crescer à toa. */
+.frase-exemplos {
+  margin-top: calc(-1 * var(--esp-1));
+}
+
+
+/* ---------------------------------------------------------
    13. MOVIMENTO REDUZIDO
    --------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {

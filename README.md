@@ -6,7 +6,7 @@ Um site simples para anotar compromissos. Você vê os próximos compromissos ag
 
 ## Funcionalidades
 
-- **Criar por frase:** escreva o compromisso do jeito que você fala, como "dentista amanhã às 10h", e aperte "Criar" (ou Enter). O formulário abre já preenchido, com uma linha que mostra o que foi entendido ("Entendi: Amanhã · 10:00 · título 'Dentista'"). Nada é salvo antes de você conferir e apertar "Salvar". Entende "hoje", "amanhã", "depois de amanhã", os dias da semana ("sexta", "sex"), "dia 15", "15/11" e horas como "10h", "10:30", "às 10", "meio-dia" e "8 da noite".
+- **Criar por frase:** escreva o compromisso do jeito que você fala, como "dentista amanhã às 10h", e aperte "Criar" (ou Enter). O formulário abre já preenchido, com uma linha que mostra o que foi entendido ("Entendi: Amanhã · 10:00 · título 'Dentista'"). Nada é salvo antes de você conferir e apertar "Salvar". Entende "hoje", "amanhã", "depois de amanhã", os dias da semana ("sexta", "sex"), "dia 15", "15/11" (ou "15/11/27") e horas como "10h", "10:30", "às 10", "meio-dia" e "8 da noite". Entende também a hora de fim ("das 10h às 11h", "por 1h30", "por meia hora"), o tempo para sair ("sair 30 min antes"), o local ("na clínica Sorriso") e o que levar ("levar RG e cartão" vira o checklist). O botão "Ver exemplos", embaixo do campo, mostra frases prontas.
 - **Lista por dia:** os próximos compromissos agrupados por dia, com hora ou "Dia todo".
 - **Criar, editar e excluir** compromissos (a exclusão pede confirmação).
 - **Anteriores:** o que já passou sai da frente, mas continua guardado, com a situação de cada um ("Feito", "Não vou fazer" ou "Passou").
@@ -64,7 +64,7 @@ agenda/
 ├── css/style.css       # visual "quadro de partidas" (tema escuro e claro, letra normal e grande)
 └── js/
     ├── datas.js          # regras de data e hora (Hoje, Amanhã, "passou", seção de cada item, "Sair às", hora de fim, conflito e aperto)
-    ├── frase.js          # entende a frase do "Criar por frase" (título, data e hora), sem mexer na tela
+    ├── frase.js          # entende a frase do "Criar por frase" (título, data, hora, fim, sair, local e o que levar), sem mexer na tela
     ├── armazenamento.js  # ler e gravar no localStorage (o único que mexe nele) e atualizar os dados antigos
     ├── copia.js          # regras da cópia: montar o arquivo, conferir a importação, juntar, lembrete
     └── app.js            # a tela: seções, faixa da semana, formulário, "Criar por frase" e a linha "Entendi", checklist, Feito, pendências, excluir, "Seus dados", tema e letra, avisos

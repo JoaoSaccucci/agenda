@@ -2570,6 +2570,46 @@ ul.frase-exemplos-lista {
 
 
 /* ---------------------------------------------------------
+   12h. ETAPA 5: LETRA GRANDE EM TELAS PEQUENAS
+   Decisões em: design.md, seção 18.
+   Medidas em px de propósito: não crescem com a letra.
+   O :root[data-letra="grande"] na frente deixa estas regras mais
+   fortes que as da 12d, sem !important.
+   --------------------------------------------------------- */
+
+/* Faixa da semana no celular: 8px dos lados (antes 15px com a letra
+   grande). A 360px sobram 137px: "1 compromisso" (≈124px) cabe numa linha. */
+@media (max-width: 639.98px) {
+  :root[data-letra="grande"] .semana-botao,
+  :root[data-letra="grande"] .semana-placa {
+    padding-inline: 8px;
+  }
+}
+
+/* Duração abaixo de 360px: "Sem hora de fim" (≈147px) tinha só 129px.
+   Com estas medidas, o texto tem 158px. */
+@media (max-width: 359.98px) {
+  :root[data-letra="grande"] .grupo-filete {
+    padding-left: 8px;
+  }
+
+  :root[data-letra="grande"] .campo-selecao select.campo-controle {
+    padding-left: 10px;
+    padding-right: 38px;                  /* seta de 20px a 8px da borda + 10px de folga */
+  }
+
+  :root[data-letra="grande"] .campo-selecao select.campo-controle[aria-invalid="true"] {
+    padding-left: 9px;                    /* a borda de erro tem 2px */
+    padding-right: 37px;
+  }
+
+  :root[data-letra="grande"] .campo-selecao::after {
+    right: 8px;
+  }
+}
+
+
+/* ---------------------------------------------------------
    13. MOVIMENTO REDUZIDO
    --------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {

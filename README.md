@@ -4,6 +4,10 @@ Um site simples para anotar compromissos. Você vê os próximos compromissos ag
 
 ### Veja o site: **https://joaosaccucci.github.io/agenda/**
 
+![Agenda no tema escuro: campo Criar por frase com uma frase digitada, faixa dos próximos 7 dias e compromissos agrupados por dia, com a Reunião do TCC e a Aula de Estrutura de Dados de hoje e, amanhã, Pagar a mensalidade da faculdade e Dentista](readme/agenda-computador.png)
+
+**Testes:** a página https://joaosaccucci.github.io/agenda/testes.html confere sozinha as 80 frases de exemplo dos requisitos do "Criar por frase" (título, data, hora, fim, tempo para sair, local, o que levar e a linha "Entendi") e mostra quantas passaram.
+
 ## Funcionalidades
 
 - **Criar por frase:** escreva o compromisso do jeito que você fala, como "dentista amanhã às 10h", e aperte "Criar" (ou Enter). O formulário abre já preenchido, com uma linha que mostra o que foi entendido ("Entendi: Amanhã · 10:00 · título 'Dentista'"). Nada é salvo antes de você conferir e apertar "Salvar". Entende "hoje", "amanhã", "depois de amanhã", os dias da semana ("sexta", "sex"), "dia 15", "15/11" (ou "15/11/27") e horas como "10h", "10:30", "às 10", "meio-dia" e "8 da noite". Entende também a hora de fim ("das 10h às 11h", "por 1h30", "por meia hora"), o tempo para sair ("sair 30 min antes"), o local ("na clínica Sorriso") e o que levar ("levar RG e cartão" vira o checklist). O botão "Ver exemplos", embaixo do campo, mostra frases prontas.
@@ -58,8 +62,10 @@ Não precisa instalar nada.
 
 ```
 agenda/
-├── index.html          # a página (uma só)
+├── index.html          # a página do site
+├── testes.html         # página de testes do "Criar por frase" (sem link no site)
 ├── favicon.svg         # ícone da aba
+├── readme/agenda-computador.png  # print usado neste README (o site não carrega)
 ├── .gitattributes      # fim de linha padrão (LF)
 ├── css/style.css       # visual "quadro de partidas" (tema escuro e claro, letra normal e grande)
 └── js/
@@ -67,6 +73,7 @@ agenda/
     ├── frase.js          # entende a frase do "Criar por frase" (título, data, hora, fim, sair, local e o que levar), sem mexer na tela
     ├── armazenamento.js  # ler e gravar no localStorage (o único que mexe nele) e atualizar os dados antigos
     ├── copia.js          # regras da cópia: montar o arquivo, conferir a importação, juntar, lembrete
+    ├── testes-frase.js   # as 80 frases dos requisitos com o resultado esperado, usadas pela testes.html
     └── app.js            # a tela: seções, faixa da semana, formulário, "Criar por frase" e a linha "Entendi", checklist, Feito, pendências, excluir, "Seus dados", tema e letra, avisos
 ```
 

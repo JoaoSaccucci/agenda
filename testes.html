@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Página de apoio de quem mantém a Agenda: fora dos buscadores e sem link no site. -->
+  <meta name="robots" content="noindex">
+  <title>Testes da frase - Agenda</title>
+  <!-- Sem isto o navegador pede /favicon.ico, que daria 404 no GitHub Pages. -->
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <!-- CSS próprio e curto (design 18.4): tema claro fixo, fontes do sistema,
+       sem o css/style.css (que depende das preferências do localStorage). -->
+  <style>
+    body {
+      max-width: 48rem;
+      margin: 0 auto;
+      padding: 1rem;
+      font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #1A1A1A;                     /* 17.4:1 no branco */
+      background: #FFFFFF;
+      overflow-wrap: anywhere;            /* frase longa quebra a 360px */
+    }
+    code {
+      font-family: ui-monospace, Consolas, "Courier New", monospace;
+      white-space: pre-wrap;              /* espaços do título ficam visíveis */
+      background: #F0F0F0;                /* texto 15.3:1 */
+      padding: 0 0.25em;
+      border-radius: 4px;
+    }
+    .resumo { font-size: 1.25rem; font-weight: 700; }
+    .falha {
+      margin-bottom: 1rem;
+      padding-left: 0.75rem;
+      border-left: 4px solid #B42318;     /* enfeite: o texto "Falhou" é o que diz (6.6:1) */
+    }
+    .falha h3 { color: #B42318; font-size: 1.125rem; }   /* 6.6:1 no branco */
+    dd { margin-left: 1rem; }
+    summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 700; }
+    :focus-visible { outline: 3px solid #0B5FC0; outline-offset: 2px; }   /* o azul do foco da Agenda: 6.2:1 */
+  </style>
+</head>
+<body>
+  <h1>Testes da frase</h1>
+
+  <!-- O resumo e as listas são preenchidos pelo js/testes-frase.js. -->
+  <p class="resumo" id="resumo">Rodando os testes...</p>
+  <p>Agora fixo: quinta-feira, 12/11/2026, 14:00. Esperados copiados das tabelas da 4a e da 4b dos requisitos.</p>
+
+  <h2>Falhas</h2>
+  <div id="falhas"></div>
+
+  <details>
+    <summary id="titulo-passaram">Passaram</summary>
+    <ol class="passaram" id="passaram"></ol>
+  </details>
+
+  <!-- Os MESMOS arquivos do site, por caminho relativo (sem cópia do código).
+       armazenamento.js entra só pelos limites do checklist (MAXIMO_DE_ITENS e
+       MAXIMO_DO_TEXTO_DO_ITEM), que o frase.js usa. Ele não mexe no
+       localStorage ao carregar, e esta página não chama nenhuma função dele.
+       O app.js (a tela) não é carregado. -->
+  <script src="js/datas.js"></script>
+  <script src="js/armazenamento.js"></script>
+  <script src="js/frase.js"></script>
+  <script src="js/testes-frase.js"></script>
+</body>
+</html>

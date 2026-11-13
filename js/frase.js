@@ -580,8 +580,22 @@ function limparTexto(texto, limite, maiuscula) {
 // colados nela: "e-mail" e "pré-e" são palavras, não a ligação "e".
 // Por isso, logo depois do "e" só vale espaço, , . ; : ou o fim do trecho,
 // e logo antes dele só vale espaço, , . ; : ou o começo do trecho.
-const E_NO_COMECO = /^[\s,.;:\-–]*e(?=[\s,.;:]|$)/;
-const E_NO_FIM = /(^|[\s,.;:])e(?:[\s,.;:][\s,.;:\-–]*)?$/;
+// Entrega 5 (US33): sai SÓ a palavra "e". A pontuação em volta dela fica
+// (os grupos entre parênteses guardam essa pontuação para o replace
+// devolver), e a limpeza de sempre arruma o resto:
+// "reunião amanhã 10h, e conversar" -> "Reunião, conversar".
+const E_NO_COMECO = /^([\s,.;:\-–]*)e(?=[\s,.;:]|$)/;
+const E_NO_FIM = /(^|[\s,.;:])e((?:[\s,.;:][\s,.;:\-–]*)?)$/;
+
+/* Tira o "e" de ligação do começo e/ou do fim de um trecho, deixando a
+   pontuação. O "e" vira um espaço (para as palavras dos lados não
+   grudarem); os espaços a mais saem na limpeza. */
+function tirarENoComeco(trecho) {
+  return trecho.replace(E_NO_COMECO, "$1 ");
+}
+function tirarENoFim(trecho) {
+  return trecho.replace(E_NO_FIM, "$1 $2");
+}
 
 /* A frase original sem os pedaços usados. Cada pedaço vira um espaço
    (para as palavras dos lados não grudarem); a limpeza tira o excesso.
@@ -595,14 +609,14 @@ function tirarPecas(frase, pecas) {
   let posicao = 0;
   pecas.forEach(function (peca, i) {
     let trecho = frase.slice(posicao, peca.inicio);
-    if (i > 0) trecho = trecho.replace(E_NO_COMECO, "");   // logo depois do pedaço anterior
-    trecho = trecho.replace(E_NO_FIM, "$1");                 // logo antes deste pedaço
+    if (i > 0) trecho = tirarENoComeco(trecho);   // logo depois do pedaço anterior
+    trecho = tirarENoFim(trecho);                   // logo antes deste pedaço
     const mantidos = (peca.manter || []).map(function (m) { return frase.slice(m.inicio, m.fim); });
     resultado += trecho + " " + mantidos.join(" ") + " ";
     posicao = peca.fim;
   });
   // O que sobra depois do último pedaço.
-  return resultado + frase.slice(posicao).replace(E_NO_COMECO, "");
+  return resultado + tirarENoComeco(frase.slice(posicao));
 }
 
 
@@ -651,7 +665,7 @@ function fimDoPedacoLivre(inicio, pecas, outra, tamanho) {
    ("na clínica e amanhã" -> "clínica"; "na ala E amanhã" -> "ala E"). */
 function textoDoPedacoLivre(frase, inicio, fim) {
   let texto = frase.slice(inicio, fim);
-  if (fim < frase.length) texto = texto.replace(E_NO_FIM, "$1");
+  if (fim < frase.length) texto = tirarENoFim(texto);
   return texto;
 }
 
